@@ -1,0 +1,58 @@
+import { z } from 'zod';
+
+export const RegisterSchema = z.object({
+  name:     z.string().min(1).max(100),
+  email:    z.string().email(),
+  password: z.string().min(8).max(128),
+});
+
+export const LoginSchema = z.object({
+  email:    z.string().email(),
+  password: z.string().min(1),
+});
+
+export const CreateDeckSchema = z.object({
+  name:        z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  subject:     z.enum(['english', 'science', 'math', 'history', 'custom']),
+});
+
+export const UpdateDeckSchema = z.object({
+  name:        z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+});
+
+export const CreateCardSchema = z.object({
+  deck_id:     z.string().uuid(),
+  front:       z.string().min(1).max(2000),
+  back:        z.string().min(1).max(2000),
+  image_url_1: z.string().url().optional(),
+  image_url_2: z.string().url().optional(),
+  tags:        z.array(z.string()).optional().default([]),
+});
+
+export const UpdateCardSchema = z.object({
+  front:       z.string().min(1).max(2000).optional(),
+  back:        z.string().min(1).max(2000).optional(),
+  image_url_1: z.string().url().nullable().optional(),
+  image_url_2: z.string().url().nullable().optional(),
+  tags:        z.array(z.string()).optional(),
+});
+
+export const CardEditorFormSchema = CreateCardSchema.pick({
+  front: true,
+  back: true,
+}).extend({
+  tags: z.string(),
+});
+
+export type CardEditorFormValues = z.infer<typeof CardEditorFormSchema>;
+
+export interface CardData {
+  id: string;
+  front: string;
+  back: string;
+  image_url_1: string | null;
+  image_url_2: string | null;
+  tags: string[] | null;
+}
