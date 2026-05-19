@@ -436,7 +436,10 @@ NEVER add 'use client' unless the file uses:
   onClick / onChange / onSubmit · shadcn/ui interactive components
 
 ALWAYS default to Server Components.
-Data fetching MUST happen in Server Components or API routes — never in useEffect.
+Data fetching MUST happen on the server — never in useEffect.
+UI reads MUST flow: Server Component -> service -> db.
+Internal mutations MAY flow: Server Action -> service -> db or API route -> service -> db.
+HTTP endpoints, uploads, auth, and external integrations MUST flow: API route -> service -> db.
 ```
 
 ```typescript
@@ -481,6 +484,8 @@ NEVER use Prisma.
 NEVER write raw SQL strings (SQL injection risk).
 NEVER query the database from a Client Component.
 NEVER create a new DB connection — always import from src/lib/db/index.ts.
+ALWAYS place business logic and DB queries in src/lib/services/*.
+NEVER duplicate ownership/auth/validation-sensitive business logic across pages, actions, and routes.
 ```
 
 ```typescript
@@ -531,6 +536,7 @@ NEVER trust request body without Zod validation.
 NEVER skip authentication check.
 ALWAYS use the { data, error } response envelope.
 ALWAYS verify resource ownership (deck.user_id === session.user.id).
+ALWAYS keep route handlers thin and delegate business logic to src/lib/services/*.
 ```
 
 Ownership check pattern:
@@ -686,9 +692,10 @@ Next.js → Vercel. FastAPI → Railway or Render. Never deploy both on the same
 | Topic | NEVER | ALWAYS |
 |---|---|---|
 | Components | Add `'use client'` by default | Default to Server Components |
-| Data fetching | `useEffect` for page data | Fetch in Server Component or API route |
+| Data fetching | `useEffect` for page data | Fetch on the server via Server Component/API route calling `src/lib/services/*` |
 | ORM | Use Prisma or raw SQL | Use Drizzle query builder |
 | DB connection | Create a new connection | Import `db` from `src/lib/db/index.ts` |
+| Business logic | Duplicate DB logic in pages/routes/actions | Centralize business logic in `src/lib/services/*` |
 | API inputs | Trust without validation | Validate with Zod first |
 | API responses | Return raw DB errors | Use `{ data, error }` envelope |
 | User identity | Read userId from request body | Read from `session.user.id` |

@@ -4,6 +4,9 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import Link from "next/link"
+import { signIn } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 const schema = z
   .object({
@@ -39,14 +42,35 @@ function getStrength(pwd: string): { level: 0 | 1 | 2 | 3 | 4; label: string; co
 
 export default function SignUpPage() {
   const [password, setPassword] = useState("")
+  const [serverError, setServerError] = useState<string | null>(null)
+  const router = useRouter()
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
-  const onSubmit = (data: FormData) => console.log("sign-up", data)
+  const onSubmit = async (data: FormData) => {
+    setServerError(null)
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: data.name, email: data.email, password: data.password }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setServerError(json.error?.message ?? "Registration failed")
+      return
+    }
+    await signIn("credentials", {
+      email: data.email,
+      password: data.password,
+      redirect: false,
+    })
+    router.push("/")
+    router.refresh()
+  }
   const strength = getStrength(password)
 
   return (
@@ -181,56 +205,45 @@ export default function SignUpPage() {
               )}
             </div>
 
+            {/* Server error */}
+            {serverError && (
+              <p className="text-xs font-medium text-error flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">error</span>
+                {serverError}
+              </p>
+            )}
+
             {/* Actions */}
             <div className="flex flex-col gap-6 mt-2">
               <button
                 type="submit"
-                className="w-full h-11 bg-primary text-on-primary font-semibold rounded-lg hover:opacity-90 transition-all flex items-center justify-center"
+                disabled={isSubmitting}
+                className="w-full h-11 bg-primary text-on-primary font-semibold rounded-lg hover:opacity-90 transition-all flex items-center justify-center disabled:opacity-60"
               >
-                Create account
+                {isSubmitting ? "Creating account…" : "Create account"}
               </button>
 
-              <div className="flex items-center gap-4">
-                <div className="flex-grow h-px bg-outline-variant/30" />
-                <span className="text-[10px] font-bold text-outline uppercase tracking-widest">
-                  — or —
-                </span>
-                <div className="flex-grow h-px bg-outline-variant/30" />
-              </div>
-
-              <button
-                type="button"
-                className="w-full h-11 bg-surface-container-lowest border border-outline-variant/50 text-on-surface font-semibold rounded-lg hover:bg-surface-bright transition-all flex items-center justify-center gap-3"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7SeKakjwSG69AX-o6DOU9wNzQwcK7acyB5UuEnco-h3d4YqSZOKkxpITBKj7_GryA7I8HYwJEiPdtjx8mu878NSYUhlvkzBxWqA7PEs-QKxwrwU2sYZw0W3B1qzNPyd-U58zjlIQaBkTFGfgZAWNlMELh2XaheR8wA6UfIY1XXht_mFDpbF9LRJaeXJ4i2BZP7s4c-V-njmHKbyw0XmbYeAKMAG2BLi6q8RiFk51LhaEgjGdxU6ezoKdUh1XHDcNOegZQ077mqrSj"
-                  alt="Google logo"
-                  className="w-5 h-5"
-                />
-                Continue with Google
-              </button>
             </div>
           </form>
 
           {/* Footer links */}
           <div className="flex flex-col items-center gap-6 pt-2 border-t border-outline-variant/10">
-            <a
-              href="/sign-in"
+            <Link
+              href="/login"
               className="text-sm font-semibold text-primary hover:text-on-primary-fixed-variant transition-colors flex items-center gap-1"
             >
               Already have an account? Sign in
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
-            </a>
+            </Link>
             <p className="text-[11px] leading-relaxed text-on-surface-variant text-center max-w-[280px]">
               By signing up you agree to our{" "}
-              <a className="underline hover:text-primary" href="#">
+              <Link className="underline hover:text-primary" href="/register">
                 Terms of Service
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a className="underline hover:text-primary" href="#">
+              <Link className="underline hover:text-primary" href="/register">
                 Privacy Policy
-              </a>
+              </Link>
             </p>
           </div>
         </div>
@@ -241,13 +254,13 @@ export default function SignUpPage() {
         <p className="text-sm font-bold text-on-surface">The Cognitive Atelier</p>
         <div className="flex gap-6">
           {["Privacy", "Terms", "Support"].map((link) => (
-            <a
+            <Link
               key={link}
-              href="#"
+              href="/register"
               className="text-xs font-medium tracking-wide uppercase text-on-surface-variant hover:text-primary transition-colors"
             >
               {link}
-            </a>
+            </Link>
           ))}
         </div>
         <p className="text-xs font-medium tracking-wide uppercase text-on-surface-variant">

@@ -4,6 +4,9 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import Link from "next/link"
+import { signIn } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 const schema = z.object({
   email: z.string().email("Invalid email address"),
@@ -13,14 +16,29 @@ type FormData = z.infer<typeof schema>
 
 export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
+  const [serverError, setServerError] = useState<string | null>(null)
+  const router = useRouter()
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
-  const onSubmit = (data: FormData) => console.log("sign-in", data)
+  const onSubmit = async (data: FormData) => {
+    setServerError(null)
+    const res = await signIn("credentials", {
+      email: data.email,
+      password: data.password,
+      redirect: false,
+    })
+    if (res?.error) {
+      setServerError("Invalid email or password")
+      return
+    }
+    router.push("/")
+    router.refresh()
+  }
 
   return (
     <div className="bg-surface text-on-surface min-h-screen flex flex-col items-center justify-center">
@@ -110,33 +128,24 @@ export default function SignInPage() {
               )}
             </div>
 
+            {/* Server error */}
+            {serverError && (
+              <p className="text-xs font-medium text-error flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">error</span>
+                {serverError}
+              </p>
+            )}
+
             {/* Actions */}
             <div className="pt-2 space-y-4">
               <button
                 type="submit"
-                className="w-full h-11 bg-primary text-on-primary font-bold rounded-lg hover:opacity-90 active:scale-[0.98] transition-all shadow-[0px_12px_32px_rgba(25,28,29,0.04)]"
+                disabled={isSubmitting}
+                className="w-full h-11 bg-primary text-on-primary font-bold rounded-lg hover:opacity-90 active:scale-[0.98] transition-all shadow-[0px_12px_32px_rgba(25,28,29,0.04)] disabled:opacity-60"
               >
-                Sign in
+                {isSubmitting ? "Signing in…" : "Sign in"}
               </button>
 
-              <div className="flex items-center gap-4 py-2">
-                <div className="h-px flex-1 bg-surface-container-high" />
-                <span className="text-xs font-medium text-on-surface-variant">— or —</span>
-                <div className="h-px flex-1 bg-surface-container-high" />
-              </div>
-
-              <button
-                type="button"
-                className="w-full h-11 bg-surface-container-lowest text-on-surface font-semibold rounded-lg border border-outline-variant/30 flex items-center justify-center gap-3 hover:bg-surface-container-low transition-colors"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCM5w3b5mXZqJFlX3Khf-dAS7WxTwjTf1eaTMQ50-CrM2tkiyYmHQOSQ7I62oTqjafdLHgFSiv0hbCgynl2L86EBm2hzYtDt6qjUhRgU4I5oXKOQGN1OSOy2ex2bBi7Wk-WraWjaTun-ztosCUMu-CgtXoUlVUw9VEccZ5-veCkRnO6L-vw2wMRIr9uRVqJc1XdkdNSNt5zfX6gnIXQlESJsS4FILqyEgBqw_TUu2zPj-18P9dOuKAJMyBjqPYtFCFfcAH-g-mNoGVr"
-                  alt="Google"
-                  className="w-5 h-5"
-                />
-                Continue with Google
-              </button>
             </div>
           </form>
         </section>
@@ -144,9 +153,9 @@ export default function SignInPage() {
         <footer className="mt-8 text-center">
           <p className="text-sm text-on-surface-variant">
             Don&apos;t have an account?
-            <a href="/sign-up" className="text-primary font-semibold hover:underline ml-1">
+            <Link href="/register" className="text-primary font-semibold hover:underline ml-1">
               Sign up →
-            </a>
+            </Link>
           </p>
         </footer>
       </main>
@@ -161,13 +170,13 @@ export default function SignInPage() {
         </div>
         <div className="flex gap-6">
           {["Privacy", "Terms", "Support"].map((link) => (
-            <a
+            <Link
               key={link}
-              href="#"
+              href="/login"
               className="text-xs font-medium tracking-wide uppercase text-on-surface-variant hover:text-primary transition-colors"
             >
               {link}
-            </a>
+            </Link>
           ))}
         </div>
       </footer>
