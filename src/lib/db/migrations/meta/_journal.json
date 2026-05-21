@@ -22,6 +22,13 @@
       "when": 1776828763810,
       "tag": "0002_thin_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779245616833,
+      "tag": "0003_peaceful_trauma",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,7 @@ export interface DeckWithStats {
   id: string;
   name: string;
   description: string | null;
-  subject: 'english' | 'science' | 'math' | 'history' | 'custom';
+  subject: string;
   created_at: string;
   total_cards: number;
   due_count: number;
@@ -43,9 +43,8 @@ export function DeckCard({
   const mastery = total_cards > 0 ? Math.round((mastered_count / total_cards) * 100) : 0;
   const fullyMastered = mastery === 100 && total_cards > 0;
   const state = due_count > 0 ? 'study' : fullyMastered ? 'mastered' : 'review';
-  const categoryLabel = subject.charAt(0).toUpperCase() + subject.slice(1);
-  const categoryClass =
-    subject === 'custom' ? 'bg-tertiary/10 text-tertiary' : 'bg-surface-container-low text-primary';
+  const categoryLabel = subject;
+  const categoryClass = 'bg-surface-container-low text-primary';
   const lastStudied = last_review
     ? formatDistanceToNow(new Date(last_review), { addSuffix: true })
     : 'Never';

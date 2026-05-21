@@ -18,10 +18,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+
 import { UpdateDeckSchema } from '@/lib/validations';
 import type { DeckWithStats } from '@/components/decks/DeckCard';
 
 type EditDeckFormValues = z.infer<typeof UpdateDeckSchema>;
+
+
 
 interface EditDeckDialogProps {
   open: boolean;
@@ -40,12 +43,14 @@ export function EditDeckDialog({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<EditDeckFormValues>({
     resolver: zodResolver(UpdateDeckSchema),
     defaultValues: {
       name: initialValues.name,
       description: initialValues.description ?? '',
+      subject: initialValues.subject,
     },
   });
 
@@ -53,9 +58,10 @@ export function EditDeckDialog({
     reset({
       name: initialValues.name,
       description: initialValues.description ?? '',
+      subject: initialValues.subject,
     });
     setSubmitError(null);
-  }, [initialValues.description, initialValues.name, reset]);
+  }, [initialValues.description, initialValues.name, initialValues.subject, reset]);
 
   const onSubmit = async (data: EditDeckFormValues): Promise<void> => {
     setSubmitError(null);
@@ -128,8 +134,15 @@ export function EditDeckDialog({
               )}
             </div>
 
-            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-              Subject: <span className="font-medium text-foreground">{initialValues.subject}</span>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-deck-subject">Subject</Label>
+              <Input
+                id="edit-deck-subject"
+                placeholder="e.g. Science, Languages, etc."
+                aria-invalid={Boolean(errors.subject)}
+                {...register('subject')}
+              />
+              {errors.subject && <p className="text-sm text-destructive">{errors.subject.message}</p>}
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">

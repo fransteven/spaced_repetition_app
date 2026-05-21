@@ -3,7 +3,6 @@ import type { AdapterAccountType } from '@auth/core/adapters';
 
 export const cardStateEnum = pgEnum('card_state', ['new', 'learning', 'review', 'relearning']);
 export const ratingEnum    = pgEnum('rating',     ['again', 'hard', 'good', 'easy']);
-export const subjectEnum   = pgEnum('subject',    ['english', 'science', 'math', 'history', 'custom']);
 
 export const users = pgTable('users', {
   id:            uuid('id').defaultRandom().primaryKey(),
@@ -38,7 +37,7 @@ export const decks = pgTable('decks', {
   user_id:     uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   name:        text('name').notNull(),
   description: text('description'),
-  subject:     subjectEnum('subject').notNull().default('custom'),
+  subject:     text('subject').notNull().default('Custom'),
   created_at:  timestamp('created_at').defaultNow().notNull(),
 });
 

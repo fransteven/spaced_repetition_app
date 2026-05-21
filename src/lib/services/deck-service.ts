@@ -10,7 +10,7 @@ export interface DeckListItem {
   id: string;
   name: string;
   description: string | null;
-  subject: 'english' | 'science' | 'math' | 'history' | 'custom';
+  subject: string;
   created_at: Date;
   total_cards: number;
   due_count: number;
@@ -27,7 +27,7 @@ export interface DeckDetailItem {
   id: string;
   name: string;
   description: string | null;
-  subject: 'english' | 'science' | 'math' | 'history' | 'custom';
+  subject: string;
   created_at: Date;
   user_id: string;
   total_cards: number;
@@ -139,7 +139,7 @@ export async function createDeckForUser(
 export async function updateDeckForUser(
   userId: string,
   deckId: string,
-  data: Partial<Pick<NewDeck, 'name' | 'description'>>
+  data: Partial<Pick<NewDeck, 'name' | 'description' | 'subject'>>
 ): Promise<typeof decks.$inferSelect> {
   await assertDeckOwnership(userId, deckId);
 

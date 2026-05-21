@@ -14,12 +14,13 @@ export const LoginSchema = z.object({
 export const CreateDeckSchema = z.object({
   name:        z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  subject:     z.enum(['english', 'science', 'math', 'history', 'custom']),
+  subject:     z.string().min(1).max(50),
 });
 
 export const UpdateDeckSchema = z.object({
   name:        z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
+  subject:     z.string().min(1).max(50).optional(),
 });
 
 export const CreateCardSchema = z.object({

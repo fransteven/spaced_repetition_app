@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Controller } from 'react-hook-form';
+
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
@@ -18,25 +18,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { CreateDeckSchema } from '@/lib/validations';
 
 type CreateDeckFormValues = z.infer<typeof CreateDeckSchema>;
 
-const SUBJECTS: ReadonlyArray<{ value: CreateDeckFormValues['subject']; label: string }> = [
-  { value: 'english', label: 'English' },
-  { value: 'science', label: 'Science' },
-  { value: 'math', label: 'Math' },
-  { value: 'history', label: 'History' },
-  { value: 'custom', label: 'Custom' },
-];
+
 
 interface CreateDeckDialogProps {
   open: boolean;
@@ -138,27 +125,11 @@ export function CreateDeckDialog({
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="create-deck-subject">Subject</Label>
-              <Controller
-                control={control}
-                name="subject"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger
-                      id="create-deck-subject"
-                      className="w-full"
-                      aria-invalid={Boolean(errors.subject)}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUBJECTS.map((subject) => (
-                        <SelectItem key={subject.value} value={subject.value}>
-                          {subject.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+              <Input
+                id="create-deck-subject"
+                placeholder="e.g. Science, Languages, etc."
+                aria-invalid={Boolean(errors.subject)}
+                {...register('subject')}
               />
               {errors.subject && <p className="text-sm text-destructive">{errors.subject.message}</p>}
             </div>
