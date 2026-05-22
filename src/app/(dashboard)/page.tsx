@@ -1,103 +1,76 @@
-import { DashboardDeckCard, DashboardDeck } from "@/components/dashboard/dashboard-deck-card"
-import { ActivityHeatmap } from "@/components/dashboard/activity-heatmap"
-import { TimelineList, TimelineItem } from "@/components/dashboard/timeline-list"
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { auth } from '@/lib/auth';
+import { getDashboardData } from '@/lib/services/dashboard-service';
+import { DashboardDeckCard } from '@/components/dashboard/dashboard-deck-card';
+import type { DashboardDeck } from '@/components/dashboard/dashboard-deck-card';
+import { ActivityHeatmap } from '@/components/dashboard/activity-heatmap';
+import { TimelineList } from '@/components/dashboard/timeline-list';
 
-const DECKS: DashboardDeck[] = [
-  {
-    icon: "translate",
-    title: "English Vocabulary",
-    category: "English",
-    mastery: 65,
-    due: 12,
-    iconBg: "bg-primary/5",
-    iconColor: "text-primary",
-  },
-  {
-    icon: "science",
-    title: "Organic Chemistry",
-    category: "Science",
-    mastery: 40,
-    due: 8,
-    iconBg: "bg-secondary-container/20",
-    iconColor: "text-secondary",
-  },
-  {
-    icon: "public",
-    title: "World Capitals",
-    category: "Geography",
-    mastery: 90,
-    due: 0,
-    iconBg: "bg-tertiary/5",
-    iconColor: "text-tertiary",
-  },
-]
+export const metadata: Metadata = {
+  title: 'Dashboard — NeuroCards',
+  description: 'Your spaced repetition study overview',
+};
 
-const TIMELINE: TimelineItem[] = [
-  {
-    label: "Tomorrow",
-    deck: "English Vocab",
-    cards: 14,
-    meta: "Intermediate · Spaced Interval",
-    dotColor: "bg-primary",
-    labelColor: "text-primary",
-  },
-  {
-    label: "In 2 days",
-    deck: "Organic Chem",
-    cards: 22,
-    meta: "Struggling · Re-evaluation",
-    dotColor: "bg-error",
-    labelColor: "text-error",
-  },
-  {
-    label: "In 3 days",
-    deck: "World Capitals",
-    cards: 5,
-    meta: "Mastered · Maintenance",
-    dotColor: "bg-tertiary",
-    labelColor: "text-tertiary",
-  },
-  {
-    label: "In 5 days",
-    deck: "Spanish Verbs",
-    cards: 30,
-    meta: "Intermediate · New Batch",
-    dotColor: "bg-outline",
-    labelColor: "text-on-surface-variant",
-  },
-  {
-    label: "Next Week",
-    deck: "Art History",
-    cards: 12,
-    meta: "Mastered · Long-term",
-    dotColor: "bg-outline",
-    labelColor: "text-on-surface-variant",
-  },
-]
+const SUBJECT_ICON: Record<string, { icon: string; iconBg: string; iconColor: string }> = {
+  english:   { icon: 'translate',   iconBg: 'bg-primary/5',              iconColor: 'text-primary' },
+  science:   { icon: 'science',     iconBg: 'bg-secondary-container/20', iconColor: 'text-secondary' },
+  math:      { icon: 'calculate',   iconBg: 'bg-tertiary/5',             iconColor: 'text-tertiary' },
+  history:   { icon: 'history_edu', iconBg: 'bg-primary/5',              iconColor: 'text-primary' },
+};
 
-export default function DashboardPage() {
+const DEFAULT_ICON = { icon: 'style', iconBg: 'bg-surface-container-high', iconColor: 'text-on-surface-variant' };
+
+function subjectIcon(subject: string) {
+  return SUBJECT_ICON[subject.toLowerCase()] ?? DEFAULT_ICON;
+}
+
+export default async function DashboardPage(): Promise<React.JSX.Element> {
+  const session = await auth();
+  if (!session?.user?.id) redirect('/login');
+
+  const data = await getDashboardData(session.user.id);
+
+  const deckCards: DashboardDeck[] = data.decks.map(d => ({
+    deckId:    d.id,
+    title:     d.name,
+    category:  d.subject,
+    mastery:   d.mastery,
+    due:       d.due_count,
+    ...subjectIcon(d.subject),
+  }));
+
   return (
     <>
       <section className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-16">
         <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
-          <span className="text-primary font-bold text-5xl tracking-tight">24</span>
+          <span className="text-primary font-bold text-5xl tracking-tight">{data.stats.dueToday}</span>
           <span className="text-on-surface font-semibold text-lg">Cards due today</span>
-          <span className="text-on-surface-variant text-sm">across 3 decks</span>
+          <span className="text-on-surface-variant text-sm">
+            {data.stats.dueDeckCount > 0
+              ? `across ${data.stats.dueDeckCount} deck${data.stats.dueDeckCount > 1 ? 's' : ''}`
+              : 'all caught up'}
+          </span>
         </div>
 
         <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
           <div className="flex items-baseline gap-2">
             <span className="text-4xl">🔥</span>
-            <span className="text-on-surface font-bold text-5xl tracking-tight">7 days</span>
+            <span className="text-on-surface font-bold text-5xl tracking-tight">
+              {data.stats.streakDays} {data.stats.streakDays === 1 ? 'day' : 'days'}
+            </span>
           </div>
           <span className="text-on-surface font-semibold text-lg">Study streak</span>
-          <span className="text-on-surface-variant text-sm">Personal record is 12!</span>
+          <span className="text-on-surface-variant text-sm">
+            {data.stats.streakDays > 0 ? 'Keep it up!' : 'Study today to start a streak'}
+          </span>
         </div>
 
         <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
-          <span className="text-tertiary font-bold text-5xl tracking-tight">142</span>
+          <span className="text-tertiary font-bold text-5xl tracking-tight">{data.stats.masteredTotal}</span>
           <span className="text-on-surface font-semibold text-lg">Mastered cards</span>
-          <span className="text-on-surface-variant text-sm">total</span>
+          <span className="text-on-surface-variant text-sm">stability ≥ 50 days</span>
         </div>
       </section>
 
@@ -105,41 +78,63 @@ export default function DashboardPage() {
         <div className="flex justify-between items-end mb-8">
           <div>
             <h2 className="text-3xl font-extrabold tracking-tight text-on-surface">Your Decks</h2>
-            <p className="text-on-surface-variant mt-1">Reviewing 3 intellectual domains today.</p>
+            <p className="text-on-surface-variant mt-1">
+              {deckCards.length > 0
+                ? `Reviewing ${deckCards.length} deck${deckCards.length > 1 ? 's' : ''} today.`
+                : 'No decks yet.'}
+            </p>
           </div>
-          <button className="text-primary font-semibold flex items-center gap-2 hover:underline">
+          <Link
+            href="/decks"
+            className="text-primary font-semibold flex items-center gap-2 hover:underline"
+          >
             View all decks <span className="material-symbols-outlined">arrow_forward</span>
-          </button>
+          </Link>
         </div>
 
-        <div className="flex overflow-x-auto gap-8 pb-4 no-scrollbar -mx-2 px-2">
-          {DECKS.map((deck) => (
-            <DashboardDeckCard key={deck.title} {...deck} />
-          ))}
-        </div>
+        {deckCards.length > 0 ? (
+          <div className="flex overflow-x-auto gap-8 pb-4 no-scrollbar -mx-2 px-2">
+            {deckCards.map(deck => (
+              <DashboardDeckCard key={deck.deckId} {...deck} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16 text-on-surface-variant">
+            <span className="material-symbols-outlined text-5xl mb-4 block">style</span>
+            <p className="font-semibold">No decks yet.</p>
+            <p className="text-sm mt-1">Create your first deck to get started.</p>
+          </div>
+        )}
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <section className="lg:col-span-2">
           <div className="mb-8">
             <h2 className="text-2xl font-bold tracking-tight text-on-surface">Activity</h2>
-            <p className="text-on-surface-variant text-sm">Last 70 days of cognitive refinement</p>
+            <p className="text-on-surface-variant text-sm">Last 70 days of study</p>
           </div>
-          <ActivityHeatmap />
+          <ActivityHeatmap cells={data.heatmap} />
         </section>
 
         <section className="lg:col-span-1">
           <div className="mb-8">
             <h2 className="text-2xl font-bold tracking-tight text-on-surface">Timeline</h2>
-            <p className="text-on-surface-variant text-sm">Upcoming intellectual challenges</p>
+            <p className="text-on-surface-variant text-sm">Upcoming reviews</p>
           </div>
-          <TimelineList timeline={TIMELINE} />
+          {data.timeline.length > 0 ? (
+            <TimelineList timeline={data.timeline} />
+          ) : (
+            <p className="text-on-surface-variant text-sm">No upcoming reviews scheduled.</p>
+          )}
         </section>
       </div>
 
-      <button className="fixed bottom-10 right-10 w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform z-50">
+      <Link
+        href="/decks"
+        className="fixed bottom-10 right-10 w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform z-50"
+      >
         <span className="material-symbols-outlined text-3xl">add</span>
-      </button>
+      </Link>
     </>
-  )
+  );
 }

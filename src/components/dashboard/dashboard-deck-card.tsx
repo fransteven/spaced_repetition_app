@@ -1,6 +1,8 @@
 import React from "react"
+import Link from "next/link"
 
 export interface DashboardDeck {
+  deckId: string
   icon: string
   title: string
   category: string
@@ -11,6 +13,7 @@ export interface DashboardDeck {
 }
 
 export function DashboardDeckCard({
+  deckId,
   icon,
   title,
   category,
@@ -56,13 +59,19 @@ export function DashboardDeckCard({
       </div>
 
       {hasDue ? (
-        <button className="w-full bg-primary text-on-primary py-3 rounded-lg font-bold text-sm hover:bg-primary-container transition-colors shadow-sm">
+        <Link
+          href={`/study/${deckId}`}
+          className="block w-full bg-primary text-on-primary py-3 rounded-lg font-bold text-sm text-center hover:bg-primary-container transition-colors shadow-sm"
+        >
           Study now
-        </button>
+        </Link>
       ) : (
-        <button className="w-full border border-primary text-primary py-3 rounded-lg font-bold text-sm hover:bg-primary/5 transition-colors">
+        <Link
+          href={`/study/${deckId}`}
+          className="block w-full border border-primary text-primary py-3 rounded-lg font-bold text-sm text-center hover:bg-primary/5 transition-colors"
+        >
           Study now
-        </button>
+        </Link>
       )}
     </div>
   )

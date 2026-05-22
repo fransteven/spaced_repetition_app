@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import Google from 'next-auth/providers/google';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
@@ -34,6 +35,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         return { id: user.id, email: user.email, name: user.name };
       },
+    }),
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope:
+            'openid email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send',
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+      allowDangerousEmailAccountLinking: true,
     }),
   ],
 });

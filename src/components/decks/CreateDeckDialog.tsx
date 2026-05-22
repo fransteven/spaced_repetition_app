@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
@@ -20,6 +20,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CreateDeckSchema } from '@/lib/validations';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SelectSeparator,
+} from '@/components/ui/select';
 
 type CreateDeckFormValues = z.infer<typeof CreateDeckSchema>;
 
@@ -30,26 +38,72 @@ interface CreateDeckDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface DeckData {
+  subject: string;
+}
+
 export function CreateDeckDialog({
   open,
   onOpenChange,
 }: CreateDeckDialogProps): React.JSX.Element {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [existingSubjects, setExistingSubjects] = useState<string[]>([]);
+  const [isCustomSubject, setIsCustomSubject] = useState(true);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
+
   const {
     register,
     handleSubmit,
     reset,
     control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateDeckFormValues>({
     resolver: zodResolver(CreateDeckSchema),
     defaultValues: {
       name: '',
       description: '',
-      subject: 'custom',
+      subject: '',
     },
   });
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const fetchSubjects = async () => {
+      setIsLoadingSubjects(true);
+      try {
+        const response = await fetch('/api/decks');
+        if (response.ok) {
+          const json = await response.json();
+          const decksData = (json as { data: DeckData[] }).data || [];
+          const subjects = Array.from(
+            new Set(
+              decksData
+                .map((d) => d.subject)
+                .filter((s) => typeof s === 'string' && s.trim() !== '')
+            )
+          ) as string[];
+          setExistingSubjects(subjects);
+          if (subjects.length > 0) {
+            setIsCustomSubject(false);
+            setValue('subject', subjects[0]);
+          } else {
+            setIsCustomSubject(true);
+            setValue('subject', '');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch existing subjects:', error);
+      } finally {
+        setIsLoadingSubjects(false);
+      }
+    };
+
+    fetchSubjects();
+  }, [open, setValue]);
 
   const onSubmit = async (data: CreateDeckFormValues): Promise<void> => {
     setSubmitError(null);
@@ -124,13 +178,74 @@ export function CreateDeckDialog({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="create-deck-subject">Subject</Label>
-              <Input
-                id="create-deck-subject"
-                placeholder="e.g. Science, Languages, etc."
-                aria-invalid={Boolean(errors.subject)}
-                {...register('subject')}
-              />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="create-deck-subject">Subject</Label>
+                {existingSubjects.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextIsCustom = !isCustomSubject;
+                      setIsCustomSubject(nextIsCustom);
+                      if (nextIsCustom) {
+                        setValue('subject', '');
+                      } else {
+                        setValue('subject', existingSubjects[0]);
+                      }
+                    }}
+                    className="text-xs text-primary hover:underline hover:text-primary/80 transition-colors cursor-pointer"
+                  >
+                    {isCustomSubject ? 'Choose existing' : 'Create new'}
+                  </button>
+                )}
+              </div>
+
+              {isLoadingSubjects ? (
+                <div className="h-10 w-full animate-pulse rounded-lg bg-input/20 dark:bg-input/10" />
+              ) : existingSubjects.length > 0 && !isCustomSubject ? (
+                <Controller
+                  name="subject"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(val) => {
+                        if (val === '__new__') {
+                          setIsCustomSubject(true);
+                          field.onChange('');
+                        } else {
+                          field.onChange(val);
+                        }
+                      }}
+                    >
+                      <SelectTrigger
+                        id="create-deck-subject"
+                        className="w-full"
+                        aria-invalid={Boolean(errors.subject)}
+                      >
+                        <SelectValue placeholder="Select a subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {existingSubjects.map((subj) => (
+                          <SelectItem key={subj} value={subj}>
+                            {subj}
+                          </SelectItem>
+                        ))}
+                        <SelectSeparator />
+                        <SelectItem value="__new__" className="text-primary font-medium">
+                          + Create custom subject...
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              ) : (
+                <Input
+                  id="create-deck-subject"
+                  placeholder="e.g. Science, Languages, etc."
+                  aria-invalid={Boolean(errors.subject)}
+                  {...register('subject')}
+                />
+              )}
               {errors.subject && <p className="text-sm text-destructive">{errors.subject.message}</p>}
             </div>
 

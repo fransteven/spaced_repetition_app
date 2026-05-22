@@ -49,6 +49,11 @@ export const CardEditorFormSchema = CreateCardSchema.pick({
 
 export type CardEditorFormValues = z.infer<typeof CardEditorFormSchema>;
 
+export const SubmitReviewSchema = z.object({
+  card_id: z.string().uuid(),
+  rating:  z.enum(['again', 'hard', 'good', 'easy']),
+});
+
 export interface CardData {
   id: string;
   front: string;
@@ -57,3 +62,14 @@ export interface CardData {
   image_url_2: string | null;
   tags: string[] | null;
 }
+
+export const CreateReminderProgramSchema = z.object({
+  name: z.string().min(1).max(100),
+  deck_id: z.string().uuid(),
+  enable_gcal: z.boolean(),
+  enable_gmail: z.boolean(),
+});
+
+export const ToggleReminderProgramSchema = z.object({
+  active: z.boolean(),
+});
