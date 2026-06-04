@@ -6,6 +6,7 @@ import { DeckCard, type DeckWithStats } from '@/components/decks/DeckCard';
 import { EmptyDeckCard } from '@/components/decks/empty-deck-card';
 import { CreateDeckDialog } from '@/components/decks/CreateDeckDialog';
 import { EditDeckDialog } from '@/components/decks/EditDeckDialog';
+import { DeleteDeckDialog } from '@/components/decks/DeleteDeckDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -21,6 +22,7 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
   const [openMenuId,   setOpenMenuId]   = useState<string | null>(null);
   const [createOpen,   setCreateOpen]   = useState(false);
   const [editDeck,     setEditDeck]     = useState<DeckWithStats | null>(null);
+  const [deleteDeck,   setDeleteDeck]   = useState<DeckWithStats | null>(null);
 
   const uniqueSubjects = Array.from(
     new Set(decks.map((deck) => {
@@ -37,11 +39,6 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
     const matchSearch = d.name.toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
-
-  const handleDelete = async (id: string) => {
-    await fetch(`/api/decks/${id}`, { method: 'DELETE' });
-    router.refresh();
-  };
 
   return (
     <>
@@ -88,7 +85,7 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
             onMenuToggle={() => setOpenMenuId(openMenuId === deck.id ? null : deck.id)}
             onMenuClose={() => setOpenMenuId(null)}
             onEdit={() => setEditDeck(deck)}
-            onDelete={() => handleDelete(deck.id)}
+            onDelete={() => setDeleteDeck(deck)}
           />
         ))}
         <EmptyDeckCard onClick={() => setCreateOpen(true)} />
@@ -104,6 +101,14 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
           open={!!editDeck}
           onOpenChange={(open) => { if (!open) setEditDeck(null); }}
           initialValues={editDeck}
+        />
+      )}
+
+      {deleteDeck && (
+        <DeleteDeckDialog
+          open={!!deleteDeck}
+          onOpenChange={(open) => { if (!open) setDeleteDeck(null); }}
+          deck={deleteDeck}
         />
       )}
     </>
