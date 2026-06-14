@@ -7,6 +7,7 @@ import { z } from "zod"
 import Link from "next/link"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { Brain, AlertCircle, Eye, EyeOff } from "lucide-react"
 
 const schema = z.object({
   email: z.string().email("Invalid email address"),
@@ -46,7 +47,7 @@ export default function SignInPage() {
         {/* Branding */}
         <div className="flex flex-col items-center mb-10">
           <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center mb-4 shadow-[0px_12px_32px_rgba(25,28,29,0.04)]">
-            <span className="material-symbols-outlined text-on-primary text-3xl">neurology</span>
+            <Brain className="text-on-primary h-7 w-7" />
           </div>
           <h1 className="text-xl font-extrabold tracking-tighter text-on-surface">NeuroCards</h1>
         </div>
@@ -80,7 +81,7 @@ export default function SignInPage() {
               />
               {errors.email && (
                 <p className="text-xs font-medium text-error mt-1 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">error</span>
+                  <AlertCircle className="h-4.5 w-4.5" />
                   {errors.email.message}
                 </p>
               )}
@@ -113,16 +114,18 @@ export default function SignInPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
                 >
-                  <span className="material-symbols-outlined text-xl">
-                    {showPassword ? "visibility_off" : "visibility"}
-                  </span>
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
               {errors.password && (
                 <p className="text-xs font-medium text-error mt-1 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">error</span>
+                  <AlertCircle className="h-4.5 w-4.5" />
                   {errors.password.message}
                 </p>
               )}
@@ -131,7 +134,7 @@ export default function SignInPage() {
             {/* Server error */}
             {serverError && (
               <p className="text-xs font-medium text-error flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">error</span>
+                <AlertCircle className="h-4.5 w-4.5" />
                 {serverError}
               </p>
             )}

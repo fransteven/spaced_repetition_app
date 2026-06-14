@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { formatDistanceToNow } from 'date-fns';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { MoreHorizontal, Pencil, PlusCircle, Trash2, ArrowRight, RefreshCw, RotateCcw } from 'lucide-react';
 
 export interface DeckWithStats {
   id: string;
@@ -15,6 +15,7 @@ export interface DeckWithStats {
   learning_count: number;
   mastered_count: number;
   last_review: string | null;
+  last_studied_label: string;
 }
 
 interface DeckCardProps extends DeckWithStats {
@@ -33,7 +34,7 @@ export function DeckCard({
   due_count,
   learning_count,
   mastered_count,
-  last_review,
+  last_studied_label,
   menuOpen,
   onMenuToggle,
   onMenuClose,
@@ -45,9 +46,6 @@ export function DeckCard({
   const state = due_count > 0 ? 'study' : fullyMastered ? 'mastered' : 'review';
   const categoryLabel = subject;
   const categoryClass = 'bg-surface-container-low text-primary';
-  const lastStudied = last_review
-    ? formatDistanceToNow(new Date(last_review), { addSuffix: true })
-    : 'Never';
   const stats = { due: due_count, learning: learning_count, mastered: mastered_count };
 
   return (
@@ -72,7 +70,7 @@ export function DeckCard({
               onClick={onMenuToggle}
               aria-label="Open deck actions"
             >
-              <span className="material-symbols-outlined">more_horiz</span>
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
 
             {menuOpen && (
@@ -88,7 +86,7 @@ export function DeckCard({
                       onEdit();
                     }}
                   >
-                    <span className="material-symbols-outlined text-base">edit</span>
+                    <Pencil className="h-4 w-4 mr-2" />
                     Edit deck
                   </Button>
                   <Link
@@ -99,7 +97,7 @@ export function DeckCard({
                       className: 'w-full justify-start rounded-none px-4 py-2 text-sm text-on-surface',
                     })}
                   >
-                    <span className="material-symbols-outlined text-base">add_circle</span>
+                    <PlusCircle className="h-4 w-4 mr-2" />
                     Add cards
                   </Link>
                   <hr className="my-1 border-outline-variant/10" />
@@ -112,7 +110,7 @@ export function DeckCard({
                       onDelete();
                     }}
                   >
-                    <span className="material-symbols-outlined text-base">delete</span>
+                    <Trash2 className="h-4 w-4 mr-2" />
                     Delete
                   </Button>
                 </div>
@@ -187,7 +185,7 @@ export function DeckCard({
 
       <div className="flex items-center justify-between gap-3">
         <span className="text-[11px] italic text-on-surface-variant">
-          Last studied {lastStudied}
+          Last studied {last_studied_label}
         </span>
 
         <Link
@@ -197,9 +195,13 @@ export function DeckCard({
           })}
         >
           {state === 'study' ? 'Study now' : state === 'review' ? 'Review' : 'Refresh'}
-          <span className="material-symbols-outlined text-sm">
-            {state === 'study' ? 'arrow_forward' : state === 'review' ? 'refresh' : 'restart_alt'}
-          </span>
+          {state === 'study' ? (
+            <ArrowRight className="h-4 w-4 ml-1" />
+          ) : state === 'review' ? (
+            <RefreshCw className="h-4 w-4 ml-1" />
+          ) : (
+            <RotateCcw className="h-4 w-4 ml-1" />
+          )}
         </Link>
       </div>
     </div>

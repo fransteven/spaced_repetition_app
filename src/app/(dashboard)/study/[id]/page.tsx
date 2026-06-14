@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   description: "Spaced repetition study session",
 }
 
+import { CheckCircle2 } from "lucide-react"
+
 type Props = { params: Promise<{ id: string }> }
 
 export default async function StudyPage({ params }: Props): Promise<React.JSX.Element> {
@@ -34,7 +36,7 @@ export default async function StudyPage({ params }: Props): Promise<React.JSX.El
     return (
       <div className="bg-surface text-on-surface min-h-screen flex flex-col items-center justify-center gap-8 px-6">
         <div className="text-center space-y-4">
-          <span className="material-symbols-outlined text-6xl text-tertiary">check_circle</span>
+          <CheckCircle2 className="h-16 w-16 text-tertiary mx-auto" />
           <h1 className="text-3xl font-bold text-primary tracking-tight">{"You're all caught up"}</h1>
           <p className="text-on-surface-variant text-sm">
             No cards due for review right now. Come back later!

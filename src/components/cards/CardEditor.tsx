@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
+import { X } from 'lucide-react';
 import {
   Dialog,
   DialogBackdrop,
@@ -267,7 +268,7 @@ export function CardEditor({
                           className="absolute top-2 right-2"
                           onClick={() => clearImage(null)}
                         >
-                          <span className="material-symbols-outlined text-xs">close</span>
+                          <X className="h-3 w-3" />
                         </Button>
                       )}
                     </div>

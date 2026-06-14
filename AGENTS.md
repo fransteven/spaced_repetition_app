@@ -674,6 +674,76 @@ Next.js → Vercel. FastAPI → Railway or Render. Never deploy both on the same
 
 ---
 
+### 10.11 Forms & Validation (Zod + react-hook-form)
+
+```
+ALWAYS use Zod schemas to validate form inputs.
+ALWAYS manage form states using react-hook-form with the zodResolver from @hookform/resolvers/zod.
+ALWAYS infer form TypeScript types dynamically from Zod schemas using z.infer<typeof Schema>.
+NEVER duplicate form types manually.
+```
+
+Example Form Implementation:
+```typescript
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const FormSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+});
+
+type FormValues = z.infer<typeof FormSchema>;
+
+export function MyForm() {
+  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(FormSchema),
+    defaultValues: { title: '' }
+  });
+  
+  const onSubmit = (data: FormValues) => {
+    // Process form data
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <input {...register('title')} />
+      {errors.title && <span>{errors.title.message}</span>}
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+```
+
+---
+
+### 10.12 Helper Utilities
+
+```
+ALWAYS use the cn() helper function from src/lib/utils.ts for conditional and merged Tailwind classes.
+ALWAYS use the formatCurrency() helper function from src/lib/utils.ts when displaying monetary/currency values.
+```
+
+Example Utilities Implementation:
+```typescript
+// src/lib/utils.ts
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
+}
+
+export function formatCurrency(amount: number, currency = 'USD', locale = 'en-US'): string {
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+  }).format(amount);
+}
+```
+
+---
+
 ## 11. Build Phases — Complete Each Before Starting the Next
 
 | Phase | Scope |

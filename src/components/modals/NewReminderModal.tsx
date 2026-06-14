@@ -8,6 +8,7 @@ import { signIn } from 'next-auth/react';
 import {
   CreateReminderProgramSchema,
 } from '@/lib/validations';
+import { X, ChevronDown, Info } from 'lucide-react';
 import type { z } from 'zod';
 import type { DeckListPageItem } from '@/lib/services/deck-service';
 
@@ -152,7 +153,7 @@ export default function NewReminderModal({ decks, onClose }: Props) {
         className="bg-surface-container-lowest w-full max-w-[680px] rounded-xl shadow-2xl overflow-hidden border border-outline-variant/20"
       >
         {/* Header */}
-        <div className="px-10 py-8">
+        <div className="px-6 sm:px-10 py-8">
           <div className="flex justify-between items-center mb-1">
             <h2 className="text-2xl font-bold tracking-tight text-on-surface">
               New Reminder Program
@@ -160,11 +161,9 @@ export default function NewReminderModal({ decks, onClose }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="p-2 hover:bg-surface-container-low rounded-full transition-colors"
+              className="p-2 hover:bg-surface-container-low rounded-full transition-colors flex items-center justify-center"
             >
-              <span className="material-symbols-outlined text-on-surface-variant">
-                close
-              </span>
+              <X className="h-5 w-5 text-on-surface-variant" />
             </button>
           </div>
           <p className="text-on-surface-variant text-sm">
@@ -173,9 +172,9 @@ export default function NewReminderModal({ decks, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="px-10 pb-10 space-y-8">
+        <div className="px-6 sm:px-10 pb-10 space-y-8">
           {/* Name + Deck */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                 Program name
@@ -205,9 +204,7 @@ export default function NewReminderModal({ decks, onClose }: Props) {
                     </option>
                   ))}
                 </select>
-                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">
-                  expand_more
-                </span>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant h-5 w-5" />
               </div>
               {errors.deck_id && (
                 <p className="text-xs text-error">{errors.deck_id.message}</p>
@@ -217,9 +214,7 @@ export default function NewReminderModal({ decks, onClose }: Props) {
 
           {/* Info box */}
           <div className="bg-primary-container/10 border-l-4 border-primary p-5 rounded-r-lg flex gap-4">
-            <span className="material-symbols-outlined text-primary shrink-0">
-              info
-            </span>
+            <Info className="text-primary shrink-0 h-5 w-5" />
             <p className="text-sm leading-relaxed text-on-primary-fixed-variant">
               Cards will be automatically grouped into 3 buckets based on memory
               strength and scheduled accordingly.
@@ -276,7 +271,7 @@ export default function NewReminderModal({ decks, onClose }: Props) {
           </div>
 
           {/* Toggles */}
-          <div className="grid grid-cols-2 gap-8 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 pt-2">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <p className="text-sm font-semibold">Connect Google Calendar</p>
@@ -327,7 +322,7 @@ export default function NewReminderModal({ decks, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="bg-surface-container-low px-10 py-6 flex justify-end items-center gap-4">
+        <div className="bg-surface-container-low px-6 sm:px-10 py-6 flex justify-end items-center gap-4">
           <button
             type="button"
             onClick={onClose}

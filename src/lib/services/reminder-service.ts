@@ -20,6 +20,7 @@ export interface BucketData {
   name: string;
   cards: number;
   intervalDays: number;
+  next_date_label: string;
 }
 
 export interface ReminderProgramItem {
@@ -107,8 +108,14 @@ export async function listProgramsForUser(
         )
       );
 
-    const buckets = computeBuckets(schedules);
-    const bucketList = Object.values(buckets);
+    const rawBuckets = computeBuckets(schedules);
+    const now = new Date();
+    const bucketList: BucketData[] = Object.values(rawBuckets).map((b) => ({
+      name: b.name,
+      cards: b.count,
+      intervalDays: b.intervalDays,
+      next_date_label: format(addDays(now, b.intervalDays), 'MMM d'),
+    }));
     const sessions = buildSessionPreview(bucketList);
 
     result.push({
@@ -151,7 +158,14 @@ export async function getBucketPreview(
       and(eq(cards.deck_id, deckId), eq(cardSchedules.user_id, userId))
     );
 
-  return Object.values(computeBuckets(schedules));
+  const rawBuckets = computeBuckets(schedules);
+  const now = new Date();
+  return Object.values(rawBuckets).map((b) => ({
+    name: b.name,
+    cards: b.count,
+    intervalDays: b.intervalDays,
+    next_date_label: format(addDays(now, b.intervalDays), 'MMM d'),
+  }));
 }
 
 export async function createProgramForUser(
@@ -184,8 +198,14 @@ export async function createProgramForUser(
       and(eq(cards.deck_id, data.deck_id), eq(cardSchedules.user_id, userId))
     );
 
-  const buckets = computeBuckets(schedules);
-  const bucketList = Object.values(buckets);
+  const rawBuckets = computeBuckets(schedules);
+  const now = new Date();
+  const bucketList: BucketData[] = Object.values(rawBuckets).map((b) => ({
+    name: b.name,
+    cards: b.count,
+    intervalDays: b.intervalDays,
+    next_date_label: format(addDays(now, b.intervalDays), 'MMM d'),
+  }));
 
   const [user] = await db
     .select({ timezone: users.timezone })
@@ -197,13 +217,13 @@ export async function createProgramForUser(
   let eventIds: string[] = [];
 
   if (data.enable_gcal) {
-    const events = buildCalendarEvents(deck.name, buckets, new Date(), timeZone);
+    const events = buildCalendarEvents(deck.name, rawBuckets, new Date(), timeZone);
     if (events.length > 0) {
       eventIds = await createBucketEvents(userId, events);
     }
   }
 
-  if (data.enable_gmail && bucketList.some((b) => b.count > 0)) {
+  if (data.enable_gmail && bucketList.some((b) => b.cards > 0)) {
     try {
       await sendReminderCreatedEmail(userId, deck.name, bucketList);
     } catch {
@@ -281,8 +301,7 @@ export async function toggleProgramActive(
         )
       );
 
-    const buckets = computeBuckets(schedules);
-    const bucketList = Object.values(buckets);
+    const rawBuckets = computeBuckets(schedules);
 
     const [user] = await db
       .select({ timezone: users.timezone })
@@ -293,7 +312,7 @@ export async function toggleProgramActive(
 
     const events = buildCalendarEvents(
       deck.name,
-      buckets,
+      rawBuckets,
       new Date(),
       timeZone
     );

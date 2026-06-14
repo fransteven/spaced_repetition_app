@@ -7,6 +7,7 @@ import { z } from "zod"
 import Link from "next/link"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { Brain, AlertCircle, CheckCircle2, ArrowRight } from "lucide-react"
 
 const schema = z
   .object({
@@ -81,12 +82,7 @@ export default function SignUpPage() {
           <div className="flex flex-col items-center text-center gap-2">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-10 h-10 bg-primary flex items-center justify-center rounded-lg">
-                <span
-                  className="material-symbols-outlined text-on-primary"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  psychology
-                </span>
+                <Brain className="text-on-primary h-6 w-6" />
               </div>
               <span className="text-xl font-extrabold text-primary tracking-tighter">
                 The Cognitive Atelier
@@ -115,7 +111,7 @@ export default function SignUpPage() {
               />
               {errors.name && (
                 <p className="text-xs text-error flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">error</span>
+                  <AlertCircle className="h-4 w-4" />
                   {errors.name.message}
                 </p>
               )}
@@ -134,7 +130,7 @@ export default function SignUpPage() {
               />
               {errors.email && (
                 <p className="text-xs text-error flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">error</span>
+                  <AlertCircle className="h-4 w-4" />
                   {errors.email.message}
                 </p>
               )}
@@ -172,7 +168,7 @@ export default function SignUpPage() {
               )}
               {errors.password && (
                 <p className="text-xs text-error flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">error</span>
+                  <AlertCircle className="h-4 w-4" />
                   {errors.password.message}
                 </p>
               )}
@@ -190,16 +186,13 @@ export default function SignUpPage() {
                   {...register("confirmPassword")}
                   className="w-full h-10 px-4 rounded-lg bg-surface-container-high border-none text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                 />
-                <span
-                  className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-tertiary text-lg"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  check_circle
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-tertiary">
+                  <CheckCircle2 className="h-5 w-5" />
                 </span>
               </div>
               {errors.confirmPassword && (
                 <p className="text-xs text-error flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">error</span>
+                  <AlertCircle className="h-4 w-4" />
                   {errors.confirmPassword.message}
                 </p>
               )}
@@ -208,7 +201,7 @@ export default function SignUpPage() {
             {/* Server error */}
             {serverError && (
               <p className="text-xs font-medium text-error flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">error</span>
+                <AlertCircle className="h-4 w-4" />
                 {serverError}
               </p>
             )}
@@ -233,7 +226,7 @@ export default function SignUpPage() {
               className="text-sm font-semibold text-primary hover:text-on-primary-fixed-variant transition-colors flex items-center gap-1"
             >
               Already have an account? Sign in
-              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              <ArrowRight className="h-4 w-4" />
             </Link>
             <p className="text-[11px] leading-relaxed text-on-surface-variant text-center max-w-[280px]">
               By signing up you agree to our{" "}

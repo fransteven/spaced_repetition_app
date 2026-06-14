@@ -1,5 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm';
 import type { InferInsertModel } from 'drizzle-orm';
+import { formatDistanceToNow } from 'date-fns';
 import { db } from '@/lib/db';
 import { decks, cards, cardSchedules } from '@/lib/db/schema';
 import { ServiceError } from '@/lib/services/service-error';
@@ -21,6 +22,7 @@ export interface DeckListItem {
 
 export interface DeckListPageItem extends Omit<DeckListItem, 'created_at'> {
   created_at: string;
+  last_studied_label: string;
 }
 
 export interface DeckDetailItem {
@@ -93,6 +95,9 @@ export async function listDecksForUserPage(userId: string): Promise<DeckListPage
   return items.map((item) => ({
     ...item,
     created_at: item.created_at.toISOString(),
+    last_studied_label: item.last_review
+      ? formatDistanceToNow(new Date(item.last_review), { addSuffix: true, includeSeconds: false })
+      : 'Never',
   }));
 }
 

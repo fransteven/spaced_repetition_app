@@ -34,7 +34,7 @@ function DialogPopup({ className, ...props }: DialogPrimitive.Popup.Props) {
     <DialogPrimitive.Popup
       className={cn(
         'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
-        'w-full max-w-md bg-surface-container-lowest rounded-xl p-6',
+        'w-[calc(100%-2rem)] sm:w-full sm:max-w-md bg-surface-container-lowest rounded-xl p-6',
         'shadow-[0px_12px_32px_rgba(25,28,29,0.12)]',
         'transition-all duration-200',
         'data-[starting-style]:opacity-0 data-[starting-style]:scale-95',

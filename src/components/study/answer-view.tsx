@@ -40,7 +40,9 @@ export function AnswerView({ card, onRate, isRating }: Props) {
             <span className="text-xs font-semibold tracking-widest uppercase text-on-surface-variant">
               {card.state}
             </span>
-            <h2 className="text-base text-on-surface-variant mt-2">{card.front}</h2>
+            <div className="mt-2">
+              <MarkdownContent content={card.front} size="sm" />
+            </div>
           </div>
 
           {/* Divider */}

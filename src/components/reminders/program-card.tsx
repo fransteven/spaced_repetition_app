@@ -1,9 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import { addDays, format } from 'date-fns';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ReminderProgramItem } from '@/lib/services/reminder-service';
+import { 
+  Layers, 
+  MoreVertical, 
+  Calendar, 
+  Play, 
+  TrendingDown, 
+  BarChart2, 
+  CheckCheck, 
+  HelpCircle, 
+  Loader2 
+} from 'lucide-react';
 
 interface Props {
   program: ReminderProgramItem;
@@ -11,32 +21,32 @@ interface Props {
 }
 
 function getBucketStyle(name: string): {
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
   borderColor: string;
   iconColor: string;
 } {
   switch (name) {
     case 'Struggling':
       return {
-        icon: 'trending_down',
+        icon: TrendingDown,
         borderColor: 'border-l-error',
         iconColor: 'text-error',
       };
     case 'Intermediate':
       return {
-        icon: 'bar_chart',
+        icon: BarChart2,
         borderColor: 'border-l-secondary',
         iconColor: 'text-secondary',
       };
     case 'Mastered':
       return {
-        icon: 'done_all',
+        icon: CheckCheck,
         borderColor: 'border-l-tertiary',
         iconColor: 'text-tertiary',
       };
     default:
       return {
-        icon: 'help',
+        icon: HelpCircle,
         borderColor: 'border-l-outline-variant',
         iconColor: 'text-on-surface-variant',
       };
@@ -51,7 +61,7 @@ function BucketRow({
   isActive: boolean;
 }) {
   const style = getBucketStyle(bucket.name);
-  const next = format(addDays(new Date(), bucket.intervalDays), 'MMM d');
+  const Icon = style.icon;
 
   return (
     <div
@@ -59,9 +69,7 @@ function BucketRow({
         !isActive ? 'opacity-60' : ''
       }`}
     >
-      <span className={`material-symbols-outlined text-xl ${style.iconColor}`}>
-        {style.icon}
-      </span>
+      <Icon className={`h-5 w-5 ${style.iconColor}`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-on-surface">{bucket.name}</p>
@@ -73,7 +81,7 @@ function BucketRow({
           <p className="text-xs text-on-surface-variant">
             Every {bucket.intervalDays} days
           </p>
-          <p className="text-xs text-on-surface-variant">Next: {next}</p>
+          <p className="text-xs text-on-surface-variant">Next: {bucket.next_date_label}</p>
         </div>
       </div>
     </div>
@@ -84,46 +92,46 @@ export function ProgramCard({ program, onNewProgram }: Props) {
   const router = useRouter();
   const isActive = program.active;
   const [menuOpen, setMenuOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  async function handleToggle() {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/reminders/${program.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: !isActive }),
-      });
-      if (res.ok) {
-        router.refresh();
+  function handleToggle() {
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/reminders/${program.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ active: !isActive }),
+        });
+        if (res.ok) {
+          router.refresh();
+        }
+      } finally {
+        setMenuOpen(false);
       }
-    } finally {
-      setLoading(false);
-      setMenuOpen(false);
-    }
+    });
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!confirm('Delete this reminder program?')) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/reminders/${program.id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        router.refresh();
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/reminders/${program.id}`, {
+          method: 'DELETE',
+        });
+        if (res.ok) {
+          router.refresh();
+        }
+      } finally {
+        setMenuOpen(false);
       }
-    } finally {
-      setLoading(false);
-      setMenuOpen(false);
-    }
+    });
   }
 
   return (
     <div
-      className={`bg-surface-container-lowest rounded-xl p-6 shadow-[0px_12px_32px_rgba(25,28,29,0.04)] border border-outline-variant/15 ${
+      className={`bg-surface-container-lowest rounded-xl p-6 shadow-[0px_12px_32px_rgba(25,28,29,0.04)] border border-outline-variant/15 transition-all duration-300 ${
         !isActive ? 'opacity-70 grayscale-[0.4]' : ''
-      }`}
+      } ${isPending ? 'opacity-50 pointer-events-none' : ''}`}
     >
       {/* Card header */}
       <div className="flex items-start justify-between mb-5">
@@ -143,31 +151,32 @@ export function ProgramCard({ program, onNewProgram }: Props) {
             )}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
-            <span className="material-symbols-outlined text-sm">style</span>
+            <Layers className="h-3.5 w-3.5" />
             Deck: {program.deck_name}
           </div>
         </div>
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
-            disabled={loading}
-            className="p-1.5 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant"
-          >
-            <span className="material-symbols-outlined text-xl">
-              more_vert
-            </span>
-          </button>
-          {menuOpen && (
+        <div className="relative flex items-center">
+          {isPending ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-1" />
+          ) : (
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="p-1.5 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant cursor-pointer flex items-center justify-center"
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          )}
+          {menuOpen && !isPending && (
             <div className="absolute right-0 top-full mt-1 bg-surface-container-lowest border border-outline-variant/20 rounded-lg shadow-lg z-10 min-w-[160px] py-1">
               <button
                 onClick={handleToggle}
-                className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors"
+                className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer"
               >
                 {isActive ? 'Pause' : 'Resume'}
               </button>
               <button
                 onClick={handleDelete}
-                className="w-full text-left px-4 py-2 text-sm text-error hover:bg-surface-container-low transition-colors"
+                className="w-full text-left px-4 py-2 text-sm text-error hover:bg-surface-container-low transition-colors cursor-pointer"
               >
                 Delete
               </button>
@@ -195,9 +204,7 @@ export function ProgramCard({ program, onNewProgram }: Props) {
                 key={i}
                 className="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2"
               >
-                <span className="material-symbols-outlined text-primary text-base">
-                  event
-                </span>
+                <Calendar className="h-4 w-4 text-primary" />
                 <div>
                   <p className="text-xs font-semibold text-on-surface">
                     {s.date}
@@ -220,11 +227,9 @@ export function ProgramCard({ program, onNewProgram }: Props) {
           </p>
           <button
             onClick={onNewProgram}
-            className="mt-3 inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-all"
+            className="mt-3 inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-all cursor-pointer"
           >
-            <span className="material-symbols-outlined text-base">
-              play_arrow
-            </span>
+            <Play className="h-4 w-4 fill-current" />
             Resume Now
           </button>
         </div>

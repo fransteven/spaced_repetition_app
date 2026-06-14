@@ -1,9 +1,10 @@
 import React from "react"
 import Link from "next/link"
+import { type LucideIcon } from "lucide-react"
 
 export interface DashboardDeck {
   deckId: string
-  icon: string
+  icon: LucideIcon
   title: string
   category: string
   mastery: number
@@ -14,7 +15,7 @@ export interface DashboardDeck {
 
 export function DashboardDeckCard({
   deckId,
-  icon,
+  icon: Icon,
   title,
   category,
   mastery,
@@ -24,15 +25,10 @@ export function DashboardDeckCard({
 }: DashboardDeck) {
   const hasDue = due > 0
   return (
-    <div className="min-w-[360px] bg-surface-container-lowest p-6 rounded-xl ring-1 ring-outline-variant/10 hover:shadow-[0px_12px_32px_rgba(25,28,29,0.04)] transition-all duration-300">
+    <div className="min-w-[320px] sm:min-w-[360px] bg-surface-container-lowest p-6 rounded-xl ring-1 ring-outline-variant/10 hover:shadow-[0px_12px_32px_rgba(25,28,29,0.04)] transition-all duration-300">
       <div className="flex justify-between items-start mb-6">
         <div className={`w-12 h-12 ${iconBg} rounded-lg flex items-center justify-center ${iconColor}`}>
-          <span
-            className="material-symbols-outlined"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            {icon}
-          </span>
+          <Icon className="h-6 w-6" />
         </div>
         {hasDue ? (
           <span className="bg-error/10 text-error px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">

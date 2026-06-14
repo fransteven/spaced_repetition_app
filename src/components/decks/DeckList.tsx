@@ -9,6 +9,7 @@ import { EditDeckDialog } from '@/components/decks/EditDeckDialog';
 import { DeleteDeckDialog } from '@/components/decks/DeleteDeckDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Search, Plus } from 'lucide-react';
 
 interface DeckListProps {
   decks: DeckWithStats[];
@@ -42,36 +43,38 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
 
   return (
     <>
-      <section className="max-w-7xl mx-auto mb-8 bg-surface-container-low p-2 rounded-xl flex flex-wrap items-center gap-2">
-        {dynamicFilters.map((filter) => (
-          <Button
-            key={filter}
-            type="button"
-            variant={activeFilter === filter ? 'default' : 'ghost'}
-            onClick={() => setActiveFilter(filter)}
-            className="px-5"
-          >
-            {filter}
-          </Button>
-        ))}
+      <section className="max-w-7xl mx-auto mb-8 bg-surface-container-low p-2 rounded-xl flex flex-col sm:flex-row flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {dynamicFilters.map((filter) => (
+            <Button
+              key={filter}
+              type="button"
+              variant={activeFilter === filter ? 'default' : 'ghost'}
+              onClick={() => setActiveFilter(filter)}
+              className="px-4 py-1.5 text-xs sm:text-sm sm:px-5"
+            >
+              {filter}
+            </Button>
+          ))}
+        </div>
 
-        <div className="ml-auto hidden sm:flex items-center bg-surface-container-lowest rounded-lg border border-outline-variant/10 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-          <span className="material-symbols-outlined pl-3 text-outline text-lg">search</span>
+        <div className="flex items-center bg-surface-container-lowest rounded-lg border border-outline-variant/10 focus-within:ring-2 focus-within:ring-primary/20 transition-all w-full sm:w-48 md:w-64 sm:ml-auto">
+          <Search className="ml-3 h-4 w-4 text-outline" />
           <Input
             type="text"
             placeholder="Filter by name…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-48 border-0 bg-transparent shadow-none focus-visible:ring-0"
+            className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm h-9 w-full"
           />
         </div>
 
         <Button
           type="button"
           onClick={() => setCreateOpen(true)}
-          className="whitespace-nowrap"
+          className="whitespace-nowrap w-full sm:w-auto"
         >
-          <span className="material-symbols-outlined text-base">add</span>
+          <Plus className="h-4 w-4 mr-1" />
           New Deck
         </Button>
       </section>

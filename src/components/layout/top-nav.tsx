@@ -1,10 +1,9 @@
-"use client"
-
-import Link from "next/link"
+import Link from 'next/link'
+import { Search } from "lucide-react"
 
 export function TopNav() {
   return (
-    <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-[12px] flex justify-between items-center px-8 py-4 shadow-sm border-b border-outline-variant/10">
+    <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-[12px] flex justify-between items-center px-4 sm:px-8 py-4 shadow-sm border-b border-outline-variant/10">
       <div className="flex items-center gap-8">
         <Link href="/" className="text-xl font-bold text-primary tracking-tight">
           NeuroCards
@@ -13,9 +12,7 @@ export function TopNav() {
 
       <div className="flex items-center gap-4">
         <div className="relative hidden sm:block">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">
-            search
-          </span>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant h-4 w-4" />
           <input
             type="text"
             placeholder="Search..."

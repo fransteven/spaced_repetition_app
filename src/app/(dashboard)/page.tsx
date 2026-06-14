@@ -7,23 +7,24 @@ import { DashboardDeckCard } from '@/components/dashboard/dashboard-deck-card';
 import type { DashboardDeck } from '@/components/dashboard/dashboard-deck-card';
 import { ActivityHeatmap } from '@/components/dashboard/activity-heatmap';
 import { TimelineList } from '@/components/dashboard/timeline-list';
+import { Languages, Atom, Calculator, BookOpen, Layers, ArrowRight, Plus } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Dashboard — NeuroCards',
   description: 'Your spaced repetition study overview',
 };
 
-const SUBJECT_ICON: Record<string, { icon: string; iconBg: string; iconColor: string }> = {
-  english:   { icon: 'translate',   iconBg: 'bg-primary/5',              iconColor: 'text-primary' },
-  science:   { icon: 'science',     iconBg: 'bg-secondary-container/20', iconColor: 'text-secondary' },
-  math:      { icon: 'calculate',   iconBg: 'bg-tertiary/5',             iconColor: 'text-tertiary' },
-  history:   { icon: 'history_edu', iconBg: 'bg-primary/5',              iconColor: 'text-primary' },
+const SUBJECT_ICON = {
+  english:   { icon: Languages,   iconBg: 'bg-primary/5',              iconColor: 'text-primary' },
+  science:   { icon: Atom,        iconBg: 'bg-secondary-container/20', iconColor: 'text-secondary' },
+  math:      { icon: Calculator,  iconBg: 'bg-tertiary/5',             iconColor: 'text-tertiary' },
+  history:   { icon: BookOpen,    iconBg: 'bg-primary/5',              iconColor: 'text-primary' },
 };
 
-const DEFAULT_ICON = { icon: 'style', iconBg: 'bg-surface-container-high', iconColor: 'text-on-surface-variant' };
+const DEFAULT_ICON = { icon: Layers, iconBg: 'bg-surface-container-high', iconColor: 'text-on-surface-variant' };
 
 function subjectIcon(subject: string) {
-  return SUBJECT_ICON[subject.toLowerCase()] ?? DEFAULT_ICON;
+  return SUBJECT_ICON[subject.toLowerCase() as keyof typeof SUBJECT_ICON] ?? DEFAULT_ICON;
 }
 
 export default async function DashboardPage(): Promise<React.JSX.Element> {
@@ -43,8 +44,8 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
 
   return (
     <>
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-16">
-        <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10 mb-16">
+        <div className="bg-surface-container-lowest p-6 md:p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
           <span className="text-primary font-bold text-5xl tracking-tight">{data.stats.dueToday}</span>
           <span className="text-on-surface font-semibold text-lg">Cards due today</span>
           <span className="text-on-surface-variant text-sm">
@@ -54,7 +55,7 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
           </span>
         </div>
 
-        <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
+        <div className="bg-surface-container-lowest p-6 md:p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
           <div className="flex items-baseline gap-2">
             <span className="text-4xl">🔥</span>
             <span className="text-on-surface font-bold text-5xl tracking-tight">
@@ -67,7 +68,7 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
           </span>
         </div>
 
-        <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
+        <div className="bg-surface-container-lowest p-6 md:p-8 rounded-xl ring-1 ring-outline-variant/10 shadow-[0px_12px_32px_rgba(25,28,29,0.02)] flex flex-col gap-1">
           <span className="text-tertiary font-bold text-5xl tracking-tight">{data.stats.masteredTotal}</span>
           <span className="text-on-surface font-semibold text-lg">Mastered cards</span>
           <span className="text-on-surface-variant text-sm">stability ≥ 50 days</span>
@@ -88,19 +89,19 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
             href="/decks"
             className="text-primary font-semibold flex items-center gap-2 hover:underline"
           >
-            View all decks <span className="material-symbols-outlined">arrow_forward</span>
+            View all decks <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
 
         {deckCards.length > 0 ? (
-          <div className="flex overflow-x-auto gap-8 pb-4 no-scrollbar -mx-2 px-2">
+          <div className="flex overflow-x-auto gap-6 md:gap-8 pb-4 no-scrollbar -mx-2 px-2">
             {deckCards.map(deck => (
               <DashboardDeckCard key={deck.deckId} {...deck} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 text-on-surface-variant">
-            <span className="material-symbols-outlined text-5xl mb-4 block">style</span>
+          <div className="text-center py-16 text-on-surface-variant flex flex-col items-center">
+            <Layers className="h-12 w-12 mb-4 text-on-surface-variant/40" />
             <p className="font-semibold">No decks yet.</p>
             <p className="text-sm mt-1">Create your first deck to get started.</p>
           </div>
@@ -131,9 +132,9 @@ export default async function DashboardPage(): Promise<React.JSX.Element> {
 
       <Link
         href="/decks"
-        className="fixed bottom-10 right-10 w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform z-50"
+        className="hidden md:flex fixed bottom-10 right-10 w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg items-center justify-center hover:scale-105 active:scale-95 transition-transform z-50 cursor-pointer"
       >
-        <span className="material-symbols-outlined text-3xl">add</span>
+        <Plus className="h-7 w-7" />
       </Link>
     </>
   );

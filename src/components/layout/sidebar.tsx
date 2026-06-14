@@ -3,12 +3,14 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { LayoutDashboard, Layers, Bell, BookOpen, BarChart2, Settings } from "lucide-react"
+
 const NAV_LINKS = [
-  { icon: "dashboard", label: "Dashboard", href: "/" },
-  { icon: "style", label: "Decks", href: "/decks" },
-  { icon: "notifications_active", label: "Reminders", href: "/reminders" },
-  { icon: "library_books", label: "Library", href: "/library" },
-  { icon: "leaderboard", label: "Analytics", href: "/analytics" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+  { icon: Layers, label: "Decks", href: "/decks" },
+  { icon: Bell, label: "Reminders", href: "/reminders" },
+  { icon: BookOpen, label: "Library", href: "/library" },
+  { icon: BarChart2, label: "Analytics", href: "/analytics" },
 ]
 
 export function Sidebar() {
@@ -27,6 +29,7 @@ export function Sidebar() {
       <nav className="flex-1 space-y-2">
         {NAV_LINKS.map((link) => {
           const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== "/")
+          const Icon = link.icon
           return (
             <Link
               key={link.label}
@@ -37,12 +40,7 @@ export function Sidebar() {
                   : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low font-medium"
               }`}
             >
-              <span
-                className="material-symbols-outlined"
-                style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
-              >
-                {link.icon}
-              </span>
+              <Icon className="w-5 h-5" />
               {link.label}
             </Link>
           )
@@ -54,7 +52,7 @@ export function Sidebar() {
           href="/settings"
           className="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-primary transition-all text-sm"
         >
-          <span className="material-symbols-outlined">settings</span>
+          <Settings className="w-5 h-5" />
           Settings
         </Link>
       </div>

@@ -2,7 +2,11 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import { cn } from '@/lib/utils';
+
+// Import highlight.js theme for syntax coloring
+import 'highlight.js/styles/github-dark.css';
 
 interface MarkdownContentProps {
   content: string;
@@ -31,6 +35,7 @@ export function MarkdownContent({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
         components={{
           /* ── Headings ─────────────────────────────────────── */
           h1: ({ children }) => (
@@ -58,10 +63,10 @@ export function MarkdownContent({
 
           /* ── Inline code ──────────────────────────────────── */
           code: ({ children, className: codeClass }) => {
-            const isBlock = codeClass?.startsWith('language-');
+            const isBlock = codeClass?.includes('language-') || codeClass?.includes('hljs');
             if (isBlock) {
               return (
-                <code className="block w-full overflow-x-auto rounded-lg bg-surface-container-high px-4 py-3 font-mono text-sm text-on-surface leading-relaxed">
+                <code className={cn("hljs block w-full overflow-x-auto rounded-lg px-4 py-3 font-mono text-sm leading-relaxed", codeClass)}>
                   {children}
                 </code>
               );
@@ -75,7 +80,7 @@ export function MarkdownContent({
 
           /* ── Code block wrapper ───────────────────────────── */
           pre: ({ children }) => (
-            <pre className="mb-3 overflow-x-auto rounded-lg bg-surface-container-high p-0">
+            <pre className="mb-3 overflow-x-auto rounded-lg p-0">
               {children}
             </pre>
           ),

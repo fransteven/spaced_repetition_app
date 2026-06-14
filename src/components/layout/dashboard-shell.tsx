@@ -17,7 +17,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="bg-background text-on-surface min-h-screen">
       <TopNav />
       <Sidebar />
-      <main className="lg:ml-64 pt-24 pb-24 px-8">{children}</main>
+      <main className="lg:ml-64 pt-24 pb-24 px-4 sm:px-8">{children}</main>
       <MobileNav />
     </div>
   )

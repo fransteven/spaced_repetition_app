@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   title: 'Deck — NeuroCards',
 };
 
+import { ArrowLeft } from 'lucide-react';
+
 type Props = { params: Promise<{ id: string }> };
 
 export default async function DeckDetailPage({ params }: Props): Promise<React.JSX.Element> {
@@ -42,7 +44,7 @@ export default async function DeckDetailPage({ params }: Props): Promise<React.J
           href="/decks"
           className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary transition-colors mb-4"
         >
-          <span className="material-symbols-outlined text-base">arrow_back</span>
+          <ArrowLeft className="h-4 w-4" />
           My Decks
         </Link>
 
