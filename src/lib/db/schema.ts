@@ -72,8 +72,8 @@ export const cardSchedules = pgTable('card_schedules', {
 // Immutable audit trail — never update or delete rows here
 export const reviewLogs = pgTable('review_logs', {
   id:             uuid('id').defaultRandom().primaryKey(),
-  card_id:        uuid('card_id').references(() => cards.id).notNull(),
-  user_id:        uuid('user_id').references(() => users.id).notNull(),
+  card_id:        uuid('card_id').references(() => cards.id, { onDelete: 'cascade' }).notNull(),
+  user_id:        uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   rating:         ratingEnum('rating').notNull(),
   scheduled_days: integer('scheduled_days').notNull(),
   elapsed_days:   integer('elapsed_days').notNull(),
