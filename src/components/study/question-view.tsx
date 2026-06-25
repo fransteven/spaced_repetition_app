@@ -40,9 +40,10 @@ interface Props {
   card:          StudyCardItem
   sessionCounts: SessionCounts
   onShowAnswer:  () => void
+  onEdit:        () => void
 }
 
-export function QuestionView({ card, sessionCounts, onShowAnswer }: Props) {
+export function QuestionView({ card, sessionCounts, onShowAnswer, onEdit }: Props) {
   return (
     <>
       {/* Stats pill */}
@@ -91,7 +92,10 @@ export function QuestionView({ card, sessionCounts, onShowAnswer }: Props) {
         {/* Edit / Flag */}
         <div className="flex justify-between items-center px-4">
           <div className="flex gap-4">
-            <button className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+            >
               <Pencil className="h-4.5 w-4.5" />
               <span className="text-sm font-medium">Edit Card</span>
             </button>

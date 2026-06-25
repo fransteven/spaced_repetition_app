@@ -1,10 +1,11 @@
 "use client"
-
+ 
 import type { StudyCardItem } from "@/lib/services/study-service"
 import type { FsrsRating } from "@/lib/fsrs/types"
 import { RATINGS } from "@/components/study/question-view"
 import { MarkdownContent } from "@/components/ui/markdown-content"
-
+import { Pencil, Flag } from "lucide-react"
+ 
 function formatInterval(days: number): string {
   if (days === 0) return "< 1 day"
   if (days === 1) return "1 day"
@@ -16,14 +17,15 @@ function formatInterval(days: number): string {
   const mo = Math.round(days / 30)
   return mo === 1 ? "1 mo" : `${mo} mo`
 }
-
+ 
 interface Props {
   card:     StudyCardItem
   onRate:   (rating: FsrsRating) => void
   isRating: boolean
+  onEdit:   () => void
 }
-
-export function AnswerView({ card, onRate, isRating }: Props) {
+ 
+export function AnswerView({ card, onRate, isRating, onEdit }: Props) {
   const hasImages = card.image_url_1 || card.image_url_2
   const images = [card.image_url_1, card.image_url_2].filter(Boolean) as string[]
 
@@ -73,6 +75,23 @@ export function AnswerView({ card, onRate, isRating }: Props) {
           )}
         </div>
       </section>
+
+      {/* Edit / Flag */}
+      <div className="flex justify-between items-center px-4 -mt-4">
+        <div className="flex gap-4">
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+          >
+            <Pencil className="h-4.5 w-4.5" />
+            <span className="text-sm font-medium">Edit Card</span>
+          </button>
+          <button className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+            <Flag className="h-4.5 w-4.5" />
+            <span className="text-sm font-medium">Flag</span>
+          </button>
+        </div>
+      </div>
 
       {/* Rating controls */}
       <div className="flex flex-col gap-4">

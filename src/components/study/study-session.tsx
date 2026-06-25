@@ -7,6 +7,8 @@ import type { FsrsRating } from "@/lib/fsrs/types"
 import { QuestionView } from "./question-view"
 import { AnswerView } from "./answer-view"
 import { CheckCircle2, ArrowLeft, Command } from "lucide-react"
+import { CardEditor } from "@/components/cards/CardEditor"
+import type { CardData } from "@/lib/validations"
 
 type SessionCounts = Record<FsrsRating, number>
 
@@ -23,6 +25,44 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
   const [counts,     setCounts]     = useState<SessionCounts>({ again: 0, hard: 0, good: 0, easy: 0 })
   const [isPending,  startTransition] = useTransition()
   const [rateError,  setRateError]  = useState<string | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editCard,   setEditCard]   = useState<CardData | null>(null)
+
+  const handleEditClick = () => {
+    if (!currentCard) return
+    setEditCard({
+      id:          currentCard.card_id,
+      front:       currentCard.front,
+      back:        currentCard.back,
+      image_url_1: currentCard.image_url_1,
+      image_url_2: currentCard.image_url_2,
+      tags:        [],
+    })
+    setEditorOpen(true)
+  }
+
+  const handleCardUpdate = (updatedCard: {
+    id: string
+    front: string
+    back: string
+    image_url_1: string | null
+    image_url_2: string | null
+    tags: string[] | null
+  }) => {
+    setCards((prev) =>
+      prev.map((c) =>
+        c.card_id === updatedCard.id
+          ? {
+              ...c,
+              front: updatedCard.front,
+              back: updatedCard.back,
+              image_url_1: updatedCard.image_url_1,
+              image_url_2: updatedCard.image_url_2,
+            }
+          : c
+      )
+    )
+  }
 
   const total       = cards.length
   const done        = currentIdx >= total
@@ -139,16 +179,18 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
             card={currentCard!}
             sessionCounts={counts}
             onShowAnswer={() => setView("answer")}
+            onEdit={handleEditClick}
           />
         ) : (
           <AnswerView
             card={currentCard!}
             onRate={handleRate}
             isRating={isPending}
+            onEdit={handleEditClick}
           />
         )}
       </main>
-
+ 
       {/* Footer */}
       {view === "answer" ? (
         <footer className="pb-10 pt-4">
@@ -173,6 +215,14 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
           </div>
         </footer>
       )}
+
+      <CardEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        deckId={deckId}
+        initialValues={editCard ?? undefined}
+        onSave={handleCardUpdate}
+      />
     </div>
   )
 }

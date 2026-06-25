@@ -33,6 +33,14 @@ interface CardEditorProps {
   onOpenChange: (open: boolean) => void;
   deckId: string;
   initialValues?: CardData;
+  onSave?: (updatedCard: {
+    id: string;
+    front: string;
+    back: string;
+    image_url_1: string | null;
+    image_url_2: string | null;
+    tags: string[] | null;
+  }) => void;
 }
 
 export function CardEditor({
@@ -40,6 +48,7 @@ export function CardEditor({
   onOpenChange,
   deckId,
   initialValues,
+  onSave,
 }: CardEditorProps): React.JSX.Element {
   const router = useRouter();
   const isEdit = Boolean(initialValues);
@@ -171,6 +180,10 @@ export function CardEditor({
     if (result.error) {
       setSubmitError(result.error.message);
       return;
+    }
+
+    if (onSave && result.data) {
+      onSave(result.data);
     }
 
     reset({
