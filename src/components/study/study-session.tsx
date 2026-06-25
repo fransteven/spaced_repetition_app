@@ -58,6 +58,7 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
         setCurrentIdx(prev => prev + 1)
         setView("question")
       } catch (err) {
+        console.error('[StudySession rating]', err)
         setRateError("An unexpected error occurred.")
       }
     })

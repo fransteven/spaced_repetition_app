@@ -43,7 +43,6 @@ export function EditDeckDialog({
     register,
     handleSubmit,
     reset,
-    control,
     formState: { errors, isSubmitting },
   } = useForm<EditDeckFormValues>({
     resolver: zodResolver(UpdateDeckSchema),
@@ -54,13 +53,18 @@ export function EditDeckDialog({
     },
   });
 
+  const [prevId, setPrevId] = useState(initialValues.id);
+  if (initialValues.id !== prevId) {
+    setPrevId(initialValues.id);
+    setSubmitError(null);
+  }
+
   useEffect(() => {
     reset({
       name: initialValues.name,
       description: initialValues.description ?? '',
       subject: initialValues.subject,
     });
-    setSubmitError(null);
   }, [initialValues.description, initialValues.name, initialValues.subject, reset]);
 
   const onSubmit = async (data: EditDeckFormValues): Promise<void> => {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { DeckCard, type DeckWithStats } from '@/components/decks/DeckCard';
 import { EmptyDeckCard } from '@/components/decks/empty-deck-card';
 import { CreateDeckDialog } from '@/components/decks/CreateDeckDialog';
@@ -16,8 +15,6 @@ interface DeckListProps {
 }
 
 export function DeckList({ decks }: DeckListProps): React.JSX.Element {
-  const router = useRouter();
-
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [search,       setSearch]       = useState('');
   const [openMenuId,   setOpenMenuId]   = useState<string | null>(null);
