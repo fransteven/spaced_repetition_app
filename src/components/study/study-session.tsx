@@ -8,6 +8,7 @@ import { QuestionView } from "./question-view"
 import { AnswerView } from "./answer-view"
 import { CheckCircle2, ArrowLeft, Command } from "lucide-react"
 import { CardEditor } from "@/components/cards/CardEditor"
+import { ExamDialog } from "@/components/study/exam-dialog"
 import type { CardData } from "@/lib/validations"
 
 type SessionCounts = Record<FsrsRating, number>
@@ -27,6 +28,7 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
   const [rateError,  setRateError]  = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editCard,   setEditCard]   = useState<CardData | null>(null)
+  const [examOpen,   setExamOpen]   = useState(false)
 
   const handleEditClick = () => {
     if (!currentCard) return
@@ -187,6 +189,7 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
             onRate={handleRate}
             isRating={isPending}
             onEdit={handleEditClick}
+            onExam={() => setExamOpen(true)}
           />
         )}
       </main>
@@ -223,6 +226,15 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
         initialValues={editCard ?? undefined}
         onSave={handleCardUpdate}
       />
+
+      {currentCard && (
+        <ExamDialog
+          open={examOpen}
+          onOpenChange={setExamOpen}
+          cardId={currentCard.card_id}
+          onVerdict={handleRate}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Search } from "lucide-react"
+import { Search, Settings } from "lucide-react"
 
 export function TopNav() {
   return (
@@ -20,6 +20,13 @@ export function TopNav() {
           />
         </div>
         <div className="flex items-center gap-3 pl-4 border-l border-outline-variant/20">
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            className="text-on-surface-variant hover:text-primary transition-colors"
+          >
+            <Settings className="h-5 w-5" />
+          </Link>
           <span className="hidden sm:inline-block text-sm font-medium text-on-surface">
             Alex Rivera
           </span>

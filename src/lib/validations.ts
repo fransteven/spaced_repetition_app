@@ -63,6 +63,22 @@ export interface CardData {
   tags: string[] | null;
 }
 
+export const ExamMessageSchema = z.object({
+  role:    z.enum(['user', 'assistant']),
+  content: z.string().min(1).max(2000),
+});
+
+export const SubmitExamTurnSchema = z.object({
+  card_id:  z.string().uuid(),
+  messages: z.array(ExamMessageSchema).max(40),
+});
+
+export const CreateSkillSchema = z.object({
+  name:   z.string().min(1).max(80),
+  topic:  z.string().min(1).max(120),
+  rubric: z.string().min(1).max(1000),
+});
+
 export const CreateReminderProgramSchema = z.object({
   name: z.string().min(1).max(100),
   deck_id: z.string().uuid(),

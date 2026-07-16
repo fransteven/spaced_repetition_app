@@ -4,7 +4,7 @@ import type { StudyCardItem } from "@/lib/services/study-service"
 import type { FsrsRating } from "@/lib/fsrs/types"
 import { RATINGS } from "@/components/study/question-view"
 import { MarkdownContent } from "@/components/ui/markdown-content"
-import { Pencil, Flag } from "lucide-react"
+import { Pencil, Flag, GraduationCap } from "lucide-react"
  
 function formatInterval(days: number): string {
   if (days === 0) return "< 1 day"
@@ -23,9 +23,10 @@ interface Props {
   onRate:   (rating: FsrsRating) => void
   isRating: boolean
   onEdit:   () => void
+  onExam:   () => void
 }
- 
-export function AnswerView({ card, onRate, isRating, onEdit }: Props) {
+
+export function AnswerView({ card, onRate, isRating, onEdit, onExam }: Props) {
   const hasImages = card.image_url_1 || card.image_url_2
   const images = [card.image_url_1, card.image_url_2].filter(Boolean) as string[]
 
@@ -76,7 +77,7 @@ export function AnswerView({ card, onRate, isRating, onEdit }: Props) {
         </div>
       </section>
 
-      {/* Edit / Flag */}
+      {/* Edit / Flag / Exam */}
       <div className="flex justify-between items-center px-4 -mt-4">
         <div className="flex gap-4">
           <button
@@ -91,6 +92,13 @@ export function AnswerView({ card, onRate, isRating, onEdit }: Props) {
             <span className="text-sm font-medium">Flag</span>
           </button>
         </div>
+        <button
+          onClick={onExam}
+          className="flex items-center gap-2 text-primary hover:text-primary-container transition-colors cursor-pointer"
+        >
+          <GraduationCap className="h-4.5 w-4.5" />
+          <span className="text-sm font-medium">Examíname con IA</span>
+        </button>
       </div>
 
       {/* Rating controls */}

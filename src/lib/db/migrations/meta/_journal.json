@@ -36,6 +36,13 @@
       "when": 1782399955936,
       "tag": "0004_panoramic_spencer_smythe",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784031531080,
+      "tag": "0005_ancient_zarda",
+      "breakpoints": true
     }
   ]
 }

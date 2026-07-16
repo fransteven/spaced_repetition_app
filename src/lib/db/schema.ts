@@ -80,6 +80,17 @@ export const reviewLogs = pgTable('review_logs', {
   reviewed_at:    timestamp('reviewed_at').defaultNow().notNull(),
 });
 
+// User-defined exam skills — used by the LLM examiner to focus study
+// exercises on a specific topic (e.g. "English vocabulary", "Anatomy").
+export const studySkills = pgTable('study_skills', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  user_id:    uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  name:       text('name').notNull(),
+  topic:      text('topic').notNull(),
+  rubric:     text('rubric').notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const reminderPrograms = pgTable('reminder_programs', {
   id:                 uuid('id').defaultRandom().primaryKey(),
   user_id:            uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
