@@ -30,9 +30,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ data: result, error: null });
   } catch (error) {
     if (error instanceof ServiceError) {
+      const status =
+        error.code === 'NOT_FOUND'    ? 404 :
+        error.code === 'UNAVAILABLE'  ? 503 :
+        403;
       return NextResponse.json(
         { data: null, error: { code: error.code, message: error.message } },
-        { status: error.code === 'NOT_FOUND' ? 404 : 403 },
+        { status },
       );
     }
     console.error('[POST /api/study/exam]', error);

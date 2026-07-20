@@ -53,8 +53,10 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
   const [done,     setDone]     = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const startedRef = useRef(false)
+  const lastAttemptRef = useRef<ExamMessage[]>([])
 
   const requestTurn = async (nextMessages: ExamMessage[]) => {
+    lastAttemptRef.current = nextMessages
     setLoading(true)
     setError(null)
     try {
@@ -111,6 +113,10 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
     void requestTurn([...messages, { role: "user", content: answer }])
   }
 
+  const handleRetry = () => {
+    void requestTurn(lastAttemptRef.current)
+  }
+
   const handleContinue = () => {
     if (!verdict) return
     onVerdict(verdict.rating)
@@ -155,7 +161,18 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
           </div>
 
           {error && (
-            <p className="text-sm text-error bg-error-container px-3 py-2 rounded-lg mb-2">{error}</p>
+            <div className="flex items-center justify-between gap-3 bg-error-container px-3 py-2 rounded-lg mb-2">
+              <p className="text-sm text-error">{error}</p>
+              <Button
+                onClick={handleRetry}
+                disabled={loading}
+                size="sm"
+                variant="secondary"
+                className="shrink-0"
+              >
+                Reintentar
+              </Button>
+            </div>
           )}
 
           {done && verdict ? (

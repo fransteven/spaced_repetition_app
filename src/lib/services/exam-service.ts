@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, type GenerateContentResponse } from '@google/genai';
 import { db } from '@/lib/db';
 import { cards, decks } from '@/lib/db/schema';
 import { ServiceError } from '@/lib/services/service-error';
@@ -8,7 +8,76 @@ import { assertCardOwnership } from '@/lib/services/card-service';
 import { listSkills } from '@/lib/services/skill-service';
 import type { FsrsRating } from '@/lib/fsrs/types';
 
-const EXAM_MODEL = 'gemini-3-flash-preview';
+// Tried in order. flash is faster/cheaper; pro is the fallback when flash
+// is overloaded (503 UNAVAILABLE) or otherwise unavailable. Gemini-only —
+// do not add other providers here.
+const EXAM_MODELS = ['gemini-3-flash-preview', 'gemini-3-pro-preview'] as const;
+
+const MAX_ATTEMPTS_PER_MODEL = 3;
+const RETRY_BASE_DELAY_MS    = 500;
+
+// Google's SDK throws an ApiError shaped like { status, message } (and often
+// an embedded { error: { code, status, message } } payload) rather than a
+// typed class we can import, so narrow with a guard instead of `any`/`as`.
+function getApiErrorStatus(err: unknown): string | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const record = err as Record<string, unknown>;
+  if (typeof record.status === 'string') return record.status;
+  const nested = record.error;
+  if (typeof nested === 'object' && nested !== null) {
+    const status = (nested as Record<string, unknown>).status;
+    if (typeof status === 'string') return status;
+  }
+  return undefined;
+}
+
+function isRetryableError(err: unknown): boolean {
+  const status = getApiErrorStatus(err);
+  return status === 'UNAVAILABLE' || status === 'RESOURCE_EXHAUSTED' || status === 'NOT_FOUND';
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Tries each model in EXAM_MODELS in order; within a model, retries
+// transient failures (overload/quota/model-unavailable) with exponential
+// backoff before falling through to the next model. Non-retryable errors
+// (auth, bad request, etc.) abort immediately.
+async function generateWithFallback(
+  ai: GoogleGenAI,
+  contents: { role: string; parts: { text: string }[] }[],
+  systemInstruction: string,
+): Promise<GenerateContentResponse> {
+  let lastError: unknown;
+
+  for (const model of EXAM_MODELS) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODEL; attempt++) {
+      try {
+        return await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema:   RESPONSE_SCHEMA,
+          },
+        });
+      } catch (err) {
+        lastError = err;
+        if (!isRetryableError(err)) throw err;
+        if (attempt < MAX_ATTEMPTS_PER_MODEL) {
+          const jitter = Math.random() * 250;
+          await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) + jitter);
+        }
+      }
+    }
+    // Exhausted retries for this model — fall through to the next one.
+  }
+
+  console.error('[exam-service] All Gemini models exhausted', lastError);
+  throw new ServiceError('UNAVAILABLE', 'El examinador está congestionado. Intenta de nuevo en un momento.');
+}
 
 export interface ExamMessage {
   role:    'user' | 'assistant';
@@ -142,15 +211,7 @@ export async function runExamTurn(
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const response = await ai.models.generateContent({
-    model: EXAM_MODEL,
-    contents,
-    config: {
-      systemInstruction,
-      responseMimeType: 'application/json',
-      responseSchema:   RESPONSE_SCHEMA,
-    },
-  });
+  const response = await generateWithFallback(ai, contents, systemInstruction);
 
   const raw = response.text;
   if (!raw) {

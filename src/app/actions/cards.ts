@@ -6,7 +6,7 @@ import { createCardForUser, updateCardForUser } from '@/lib/services/card-servic
 import { ServiceError } from '@/lib/services/service-error';
 
 interface ActionError {
-  code: 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'FORBIDDEN' | 'INTERNAL_ERROR';
+  code: 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'FORBIDDEN' | 'UNAVAILABLE' | 'INTERNAL_ERROR';
   message: string;
 }
 
