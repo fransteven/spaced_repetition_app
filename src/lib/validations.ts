@@ -82,8 +82,7 @@ export const CreateSkillSchema = z.object({
 export const CreateReminderProgramSchema = z.object({
   name: z.string().min(1).max(100),
   deck_id: z.string().uuid(),
-  enable_gcal: z.boolean(),
-  enable_gmail: z.boolean(),
+  enable_email: z.boolean(),
 });
 
 export const ToggleReminderProgramSchema = z.object({

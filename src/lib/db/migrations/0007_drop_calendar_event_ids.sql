@@ -1,0 +1,1 @@
+ALTER TABLE "reminder_programs" DROP COLUMN "calendar_event_ids";

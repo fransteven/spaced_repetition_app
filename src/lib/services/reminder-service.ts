@@ -5,15 +5,15 @@ import {
   cards,
   cardSchedules,
   reminderPrograms,
-  users,
+  reminderSchedules,
 } from '@/lib/db/schema';
 import { ServiceError } from '@/lib/services/service-error';
-import { computeBuckets, buildCalendarEvents } from '@/lib/scheduler';
 import {
-  createBucketEvents,
-  deleteBucketEvents,
-} from '@/lib/services/google-calendar-service';
-import { sendReminderCreatedEmail } from '@/lib/services/gmail-service';
+  computeBuckets,
+  startOfDayUTC,
+  BUCKET_INTERVALS,
+  type BucketKey,
+} from '@/lib/scheduler';
 import { addDays, format } from 'date-fns';
 
 export interface BucketData {
@@ -51,20 +51,21 @@ function buildSessionPreview(buckets: BucketData[]): Array<{
     }
   }
 
-  // Merge by date
+  // Merge by day, keyed on a sortable ISO date so ordering is chronological
+  // (formatting to 'MMM d' before sorting would put "Apr 3" before "Feb 1").
   const merged = new Map<string, number>();
   for (const occ of occurrences) {
-    const key = format(occ.date, 'MMM d');
+    const key = format(occ.date, 'yyyy-MM-dd');
     merged.set(key, (merged.get(key) ?? 0) + occ.cards);
   }
 
   return Array.from(merged.entries())
-    .map(([date, cards]) => ({ date, cards }))
-    .sort((a, b) => {
-      // Sort by parsing the date string back — this is a preview so approximate ordering is fine
-      return a.date.localeCompare(b.date);
-    })
-    .slice(0, 4);
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 4)
+    .map(([key, cards]) => ({
+      date: format(new Date(`${key}T00:00:00`), 'MMM d'),
+      cards,
+    }));
 }
 
 async function assertProgramOwnership(
@@ -168,13 +169,27 @@ export async function getBucketPreview(
   }));
 }
 
+/** Seed one cadence row per bucket, due on the next daily digest run. */
+async function seedSchedules(programId: string): Promise<void> {
+  const today = startOfDayUTC(new Date());
+  const keys = Object.keys(BUCKET_INTERVALS) as BucketKey[];
+
+  await db.insert(reminderSchedules).values(
+    keys.map((bucket) => ({
+      program_id: programId,
+      bucket,
+      interval_days: BUCKET_INTERVALS[bucket],
+      next_run_at: today,
+    }))
+  );
+}
+
 export async function createProgramForUser(
   userId: string,
   data: {
     name: string;
     deck_id: string;
-    enable_gcal: boolean;
-    enable_gmail: boolean;
+    enable_email: boolean;
   }
 ): Promise<ReminderProgramItem> {
   const [deck] = await db
@@ -207,30 +222,6 @@ export async function createProgramForUser(
     next_date_label: format(addDays(now, b.intervalDays), 'MMM d'),
   }));
 
-  const [user] = await db
-    .select({ timezone: users.timezone })
-    .from(users)
-    .where(eq(users.id, userId));
-
-  const timeZone = user?.timezone ?? 'America/Bogota';
-
-  let eventIds: string[] = [];
-
-  if (data.enable_gcal) {
-    const events = buildCalendarEvents(deck.name, rawBuckets, new Date(), timeZone);
-    if (events.length > 0) {
-      eventIds = await createBucketEvents(userId, events);
-    }
-  }
-
-  if (data.enable_gmail && bucketList.some((b) => b.cards > 0)) {
-    try {
-      await sendReminderCreatedEmail(userId, deck.name, bucketList);
-    } catch {
-      // Non-fatal: email failure should not block program creation
-    }
-  }
-
   const [program] = await db
     .insert(reminderPrograms)
     .values({
@@ -238,9 +229,11 @@ export async function createProgramForUser(
       deck_id: data.deck_id,
       name: data.name,
       active: true,
-      calendar_event_ids: eventIds,
+      enable_email: data.enable_email,
     })
     .returning();
+
+  await seedSchedules(program.id);
 
   const sessions = buildSessionPreview(bucketList);
 
@@ -263,69 +256,18 @@ export async function toggleProgramActive(
 ): Promise<ReminderProgramItem> {
   await assertProgramOwnership(userId, programId);
 
-  const [program] = await db
-    .select()
-    .from(reminderPrograms)
+  await db
+    .update(reminderPrograms)
+    .set({ active })
     .where(eq(reminderPrograms.id, programId));
 
-  const storedEventIds = Array.isArray(program.calendar_event_ids)
-    ? (program.calendar_event_ids as string[])
-    : [];
-
-  if (!active && storedEventIds.length > 0) {
-    try {
-      await deleteBucketEvents(userId, storedEventIds);
-    } catch {
-      // Non-fatal: events may already be deleted
-    }
-
+  // Resuming restarts the cadence from today so a long pause does not leave
+  // next_run_at stuck in the past.
+  if (active) {
     await db
-      .update(reminderPrograms)
-      .set({ active: false, calendar_event_ids: [] })
-      .where(eq(reminderPrograms.id, programId));
-  } else if (active) {
-    // Reactivate: recompute buckets and create new events
-    const [deck] = await db
-      .select({ name: decks.name })
-      .from(decks)
-      .where(eq(decks.id, program.deck_id));
-
-    const schedules = await db
-      .select({ stability: cardSchedules.stability })
-      .from(cardSchedules)
-      .innerJoin(cards, eq(cards.id, cardSchedules.card_id))
-      .where(
-        and(
-          eq(cards.deck_id, program.deck_id),
-          eq(cardSchedules.user_id, userId)
-        )
-      );
-
-    const rawBuckets = computeBuckets(schedules);
-
-    const [user] = await db
-      .select({ timezone: users.timezone })
-      .from(users)
-      .where(eq(users.id, userId));
-
-    const timeZone = user?.timezone ?? 'America/Bogota';
-
-    const events = buildCalendarEvents(
-      deck.name,
-      rawBuckets,
-      new Date(),
-      timeZone
-    );
-
-    let newEventIds: string[] = [];
-    if (events.length > 0) {
-      newEventIds = await createBucketEvents(userId, events);
-    }
-
-    await db
-      .update(reminderPrograms)
-      .set({ active: true, calendar_event_ids: newEventIds })
-      .where(eq(reminderPrograms.id, programId));
+      .update(reminderSchedules)
+      .set({ next_run_at: startOfDayUTC(new Date()) })
+      .where(eq(reminderSchedules.program_id, programId));
   }
 
   // Fetch updated program
@@ -345,22 +287,6 @@ export async function deleteProgramForUser(
 ): Promise<void> {
   await assertProgramOwnership(userId, programId);
 
-  const [program] = await db
-    .select()
-    .from(reminderPrograms)
-    .where(eq(reminderPrograms.id, programId));
-
-  const storedEventIds = Array.isArray(program.calendar_event_ids)
-    ? (program.calendar_event_ids as string[])
-    : [];
-
-  if (storedEventIds.length > 0) {
-    try {
-      await deleteBucketEvents(userId, storedEventIds);
-    } catch {
-      // Non-fatal: events may already be deleted
-    }
-  }
-
+  // reminder_schedules rows cascade with the program.
   await db.delete(reminderPrograms).where(eq(reminderPrograms.id, programId));
 }

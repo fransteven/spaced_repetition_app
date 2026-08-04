@@ -4,6 +4,7 @@ import { useState } from 'react';
 import NewReminderModal from '@/components/modals/NewReminderModal';
 import { ProgramCard } from '@/components/reminders/program-card';
 import { EmptyStateCard } from '@/components/reminders/empty-state-card';
+import { SendDigestButton } from '@/components/reminders/send-digest-button';
 import type { ReminderProgramItem } from '@/lib/services/reminder-service';
 import type { DeckListPageItem } from '@/lib/services/deck-service';
 
@@ -21,13 +22,16 @@ export function RemindersContent({ programs, decks }: Props) {
     <>
       <div className="max-w-4xl mx-auto py-10">
         {/* Page header */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight text-on-surface mb-1">
-            Study Reminders
-          </h1>
-          <p className="text-sm text-on-surface-variant">
-            Automated review schedules synced to Google Calendar
-          </p>
+        <div className="mb-10 flex items-start justify-between gap-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-on-surface mb-1">
+              Study Reminders
+            </h1>
+            <p className="text-sm text-on-surface-variant">
+              Automated review schedules delivered by email at 8:00 AM
+            </p>
+          </div>
+          {programs.length > 0 && <SendDigestButton />}
         </div>
 
         {/* Program cards */}

@@ -6,7 +6,7 @@
 
 ## 1. Project Overview
 
-A web-based **spaced repetition flashcard app** (Anki-style). Users create decks, add cards (question + answer + up to 2 images), and study via the **FSRS 4.5 algorithm**. The system schedules automated review reminders via Gmail and Google Calendar.
+A web-based **spaced repetition flashcard app** (Anki-style). Users create decks, add cards (question + answer + up to 2 images), and study via the **FSRS 4.5 algorithm**. The system schedules automated review reminders as a daily email digest (Nodemailer over SMTP, scheduled by an Inngest cron).
 
 ### Two repos — never merge them
 
@@ -24,7 +24,7 @@ Frontend : Next.js 16 (App Router) · TypeScript · TailwindCSS · shadcn/ui
 Database : NeonDB (PostgreSQL serverless) · Drizzle ORM
 Auth     : NextAuth v5 (next-auth@beta) · @auth/drizzle-adapter
 Images   : Cloudinary (server-only)
-Reminders: Gmail MCP · Google Calendar MCP
+Reminders: Nodemailer (SMTP) · Inngest (cron)
 LLM layer: FastAPI + Anthropic SDK (Phase 6 only — do not build until Phase 1–5 done)
 Deploy   : Vercel (Next.js) · Railway or Render (FastAPI)
 ```
@@ -166,13 +166,36 @@ export const reviewLogs = pgTable('review_logs', {
 });
 
 export const reminderPrograms = pgTable('reminder_programs', {
-  id:                 uuid('id').defaultRandom().primaryKey(),
-  user_id:            uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  deck_id:            uuid('deck_id').references(() => decks.id, { onDelete: 'cascade' }).notNull(),
-  name:               text('name').notNull(),
-  active:             boolean('active').notNull().default(true),
-  calendar_event_ids: jsonb('calendar_event_ids').default('[]'),
-  created_at:         timestamp('created_at').defaultNow().notNull(),
+  id:           uuid('id').defaultRandom().primaryKey(),
+  user_id:      uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  deck_id:      uuid('deck_id').references(() => decks.id, { onDelete: 'cascade' }).notNull(),
+  name:         text('name').notNull(),
+  active:       boolean('active').notNull().default(true),
+  enable_email: boolean('enable_email').notNull().default(true),
+  created_at:   timestamp('created_at').defaultNow().notNull(),
+});
+
+// Cadence clock — one row per (program, bucket). See §7.3.
+export const reminderSchedules = pgTable('reminder_schedules', {
+  id:            uuid('id').defaultRandom().primaryKey(),
+  program_id:    uuid('program_id').references(() => reminderPrograms.id, { onDelete: 'cascade' }).notNull(),
+  bucket:        text('bucket').notNull(),        // 'struggling' | 'intermediate' | 'mastered'
+  interval_days: integer('interval_days').notNull(),
+  next_run_at:   timestamp('next_run_at').notNull(),
+  created_at:    timestamp('created_at').defaultNow().notNull(),
+});
+
+// Digest audit trail + idempotency guard (one digest per user per day).
+export const reminderDeliveries = pgTable('reminder_deliveries', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  user_id:     uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  digest_date: text('digest_date').notNull(),     // 'YYYY-MM-DD' (UTC)
+  sent_to:     text('sent_to').notNull(),
+  item_count:  integer('item_count').notNull(),
+  dedupe_key:  text('dedupe_key').unique().notNull(),
+  status:      text('status').notNull(),          // 'sent' | 'failed' | 'empty'
+  error:       text('error'),
+  created_at:  timestamp('created_at').defaultNow().notNull(),
 });
 ```
 
@@ -282,8 +305,8 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `GET /api/study/session?deckId=` | — | Returns ordered due cards (see §6.3) |
 | `POST /api/study/review` | `{ card_id, rating }` | Runs FSRS, writes atomically |
 | `GET /api/reminders` | — | User's reminder programs |
-| `POST /api/reminders` | `{ name, deck_id }` | Creates GCal events + Gmail email |
-| `DELETE /api/reminders/[id]` | — | Cancels calendar events |
+| `POST /api/reminders` | `{ name, deck_id, enable_email }` | Seeds one reminder_schedules row per bucket |
+| `DELETE /api/reminders/[id]` | — | Cascades to reminder_schedules |
 
 ### 6.3 Study session card ordering (strict — do not reorder)
 
@@ -358,19 +381,30 @@ export async function POST(request: Request) {
 | Intermediate | 10 ≤ S < 50 | Every 10 days | 1-month retention target |
 | Mastered | S ≥ 50 | Every 45 days | 1-year retention target |
 
-### 7.2 Calendar event title format
+### 7.2 Delivery
 
-```
-"SRS: [Deck name] — Struggling (12 cards)"
-"SRS: [Deck name] — Intermediate (8 cards)"
-"SRS: [Deck name] — Mastered (5 cards)"
-```
+One digest email per user per day, not one per program. Subject:
+`"Today's review: [N] cards due"`. The body lists Deck · Bucket · Cards with a
+link to `/study/[deckId]`, rendered by `renderStudyDigestEmail` in
+`src/lib/email/templates/study-digest.ts`.
 
-Email subject: `"Study schedule created: [Deck name]"`
+### 7.3 Scheduling
 
-### 7.3 Event IDs storage
+`reminder_schedules` holds one row per (program, bucket) with `interval_days`
+and `next_run_at`. The Inngest cron `daily-study-digest`
+(`TZ=America/Bogota 0 8 * * *`, `src/inngest/functions.ts`) selects rows whose
+`next_run_at` has come due, recomputes bucket membership with `computeBuckets`,
+sends the digest, then advances `next_run_at` to *today + interval_days* —
+anchored to today so a missed cron never fires a catch-up burst.
 
-Store returned Google Calendar event IDs in `reminder_programs.calendar_event_ids` (jsonb array). Use these IDs to cancel events on program delete.
+Idempotency comes from `reminder_deliveries.dedupe_key`
+(`digest:<userId>:<YYYY-MM-DD>`, UNIQUE), not from Inngest options. All day math
+is normalized to UTC (`startOfDayUTC`, `toDateKey` in `src/lib/scheduler.ts`)
+because Neon stores `timestamp` without a timezone.
+
+`sendEmail` never throws: SMTP failures are recorded as
+`reminder_deliveries.status = 'failed'` so Inngest does not retry a bad
+credential four times.
 
 ---
 
@@ -384,6 +418,12 @@ NEXTAUTH_URL=http://localhost:3000
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+SMTP_HOST=smtp.gmail.com          # reminder digests (Gmail app password)
+SMTP_PORT=465
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=                        # optional, falls back to SMTP_USER
+INNGEST_DEV=1                     # local dev; use INNGEST_SIGNING_KEY in prod
 LLM_API_URL=http://localhost:8000  # FastAPI (Phase 6)
 ```
 
@@ -752,7 +792,7 @@ export function formatCurrency(amount: number, currency = 'USD', locale = 'en-US
 | **2 — Cards & Decks** | All API routes for decks + cards · Deck list page · Card editor with image upload |
 | **3 — Study Session** | FSRS engine (`src/lib/fsrs/`) · Study session page · `POST /api/study/review` |
 | **4 — Dashboard** | Study stats · card due forecast · streak counter · activity heatmap |
-| **5 — Reminders** | `src/lib/scheduler.ts` · Gmail MCP + Google Calendar MCP integration |
+| **5 — Reminders** | `src/lib/scheduler.ts` · Nodemailer SMTP + Inngest cron digest |
 | **6 — FastAPI LLM** | Only start after Phases 1–5 are fully working and deployed |
 
 ---

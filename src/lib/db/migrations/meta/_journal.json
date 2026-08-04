@@ -43,6 +43,20 @@
       "when": 1784031531080,
       "tag": "0005_ancient_zarda",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784969671422,
+      "tag": "0006_add_reminder_email_schedules",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784969681897,
+      "tag": "0007_drop_calendar_event_ids",
+      "breakpoints": true
     }
   ]
 }

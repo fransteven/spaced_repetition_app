@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, boolean, jsonb, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from '@auth/core/adapters';
 
 export const cardStateEnum = pgEnum('card_state', ['new', 'learning', 'review', 'relearning']);
@@ -92,11 +92,35 @@ export const studySkills = pgTable('study_skills', {
 });
 
 export const reminderPrograms = pgTable('reminder_programs', {
-  id:                 uuid('id').defaultRandom().primaryKey(),
-  user_id:            uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  deck_id:            uuid('deck_id').references(() => decks.id, { onDelete: 'cascade' }).notNull(),
-  name:               text('name').notNull(),
-  active:             boolean('active').notNull().default(true),
-  calendar_event_ids: jsonb('calendar_event_ids').default('[]'),
-  created_at:         timestamp('created_at').defaultNow().notNull(),
+  id:           uuid('id').defaultRandom().primaryKey(),
+  user_id:      uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  deck_id:      uuid('deck_id').references(() => decks.id, { onDelete: 'cascade' }).notNull(),
+  name:         text('name').notNull(),
+  active:       boolean('active').notNull().default(true),
+  enable_email: boolean('enable_email').notNull().default(true),
+  created_at:   timestamp('created_at').defaultNow().notNull(),
+});
+
+// Cadence clock — one row per (program, bucket). Bucket membership is NOT
+// stored here; it is recomputed with computeBuckets() on every send.
+export const reminderSchedules = pgTable('reminder_schedules', {
+  id:            uuid('id').defaultRandom().primaryKey(),
+  program_id:    uuid('program_id').references(() => reminderPrograms.id, { onDelete: 'cascade' }).notNull(),
+  bucket:        text('bucket').notNull(),        // 'struggling' | 'intermediate' | 'mastered'
+  interval_days: integer('interval_days').notNull(),
+  next_run_at:   timestamp('next_run_at').notNull(),
+  created_at:    timestamp('created_at').defaultNow().notNull(),
+});
+
+// Digest audit trail + idempotency guard (one digest per user per day).
+export const reminderDeliveries = pgTable('reminder_deliveries', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  user_id:     uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  digest_date: text('digest_date').notNull(),     // 'YYYY-MM-DD' (UTC)
+  sent_to:     text('sent_to').notNull(),
+  item_count:  integer('item_count').notNull(),
+  dedupe_key:  text('dedupe_key').unique().notNull(),
+  status:      text('status').notNull(),          // 'sent' | 'failed' | 'empty'
+  error:       text('error'),
+  created_at:  timestamp('created_at').defaultNow().notNull(),
 });

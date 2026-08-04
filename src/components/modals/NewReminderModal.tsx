@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
 import {
   CreateReminderProgramSchema,
 } from '@/lib/validations';
@@ -75,14 +74,12 @@ export default function NewReminderModal({ decks, onClose }: Props) {
     defaultValues: {
       name: '',
       deck_id: decks[0]?.id ?? '',
-      enable_gcal: true,
-      enable_gmail: true,
+      enable_email: true,
     },
   });
 
   const deckId = watch('deck_id');
-  const enableGcal = watch('enable_gcal');
-  const enableGmail = watch('enable_gmail');
+  const enableEmail = watch('enable_email');
 
   useEffect(() => {
     if (!deckId) {
@@ -143,8 +140,6 @@ export default function NewReminderModal({ decks, onClose }: Props) {
       setSubmitting(false);
     }
   }
-
-  const isGoogleError = errorMessage?.includes('Google account not linked');
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-on-surface/40 backdrop-blur-sm p-4">
@@ -271,52 +266,25 @@ export default function NewReminderModal({ decks, onClose }: Props) {
           </div>
 
           {/* Toggles */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 pt-2">
+          <div className="pt-2">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <p className="text-sm font-semibold">Connect Google Calendar</p>
+                <p className="text-sm font-semibold">Email reminders</p>
                 <p className="text-xs text-on-surface-variant">
-                  Block study slots automatically
+                  Daily digest at 8:00 AM when a bucket comes due
                 </p>
               </div>
               <Toggle
-                checked={enableGcal}
-                onChange={() => setValue('enable_gcal', !enableGcal)}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <p className="text-sm font-semibold">Send Gmail reminders</p>
-                <p className="text-xs text-on-surface-variant">
-                  Get notified for daily sessions
-                </p>
-              </div>
-              <Toggle
-                checked={enableGmail}
-                onChange={() => setValue('enable_gmail', !enableGmail)}
+                checked={enableEmail}
+                onChange={() => setValue('enable_email', !enableEmail)}
               />
             </div>
           </div>
 
-          {/* Error / Google CTA */}
+          {/* Error */}
           {errorMessage && (
             <div className="bg-error-container/10 border-l-4 border-error p-4 rounded-r-lg">
-              {isGoogleError ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-on-error-container">
-                    {errorMessage}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => signIn('google')}
-                    className="inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-all"
-                  >
-                    Link Google Account
-                  </button>
-                </div>
-              ) : (
-                <p className="text-sm text-on-error-container">{errorMessage}</p>
-              )}
+              <p className="text-sm text-on-error-container">{errorMessage}</p>
             </div>
           )}
         </div>
