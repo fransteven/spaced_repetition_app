@@ -8,8 +8,16 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "NeuroCards",
-  description: "Spaced repetition learning app",
+  title: {
+    default: "NeuroCards — Spaced Repetition Learning",
+    template: "%s — NeuroCards",
+  },
+  description: "Advanced spaced repetition flashcard app powered by FSRS 4.5 algorithm",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/logo.png",
+  },
 };
 
 import { Providers } from "@/components/providers";

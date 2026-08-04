@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation"
 
 import { LayoutDashboard, Layers, Bell, BookOpen, BarChart2, Settings } from "lucide-react"
 
+import { AppLogo } from "@/components/ui/app-logo"
+
 const NAV_LINKS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: Layers, label: "Decks", href: "/decks" },
@@ -19,9 +21,9 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex flex-col h-screen w-64 fixed left-0 top-0 bg-surface-container-low py-8 px-6 pt-24 z-40">
       {/* Branding */}
-      <div className="mb-8">
-        <h2 className="text-lg font-black text-on-surface leading-tight">The Cognitive Atelier</h2>
-        <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mt-1">
+      <div className="mb-8 flex flex-col gap-1">
+        <AppLogo size="md" href="/" />
+        <p className="text-[10px] text-on-surface-variant uppercase tracking-widest pl-1 mt-0.5">
           The Digital Curator
         </p>
       </div>

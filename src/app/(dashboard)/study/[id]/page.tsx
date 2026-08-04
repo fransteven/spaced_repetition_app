@@ -6,14 +6,25 @@ import { getStudySession } from "@/lib/services/study-service"
 import { ServiceError } from "@/lib/services/service-error"
 import { StudySession } from "@/components/study/study-session"
 
-export const metadata: Metadata = {
-  title: "Study — NeuroCards",
-  description: "Spaced repetition study session",
-}
-
 import { CheckCircle2 } from "lucide-react"
 
 type Props = { params: Promise<{ id: string }> }
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const session = await auth()
+  if (!session?.user?.id) return { title: "Estudio" }
+
+  const { id } = await params
+  try {
+    const data = await getStudySession(session.user.id, id)
+    return {
+      title: `Estudiando: ${data.deckName}`,
+      description: `Sesión de repetición espaciada para ${data.deckName}`,
+    }
+  } catch {
+    return { title: "Estudio" }
+  }
+}
 
 export default async function StudyPage({ params }: Props): Promise<React.JSX.Element> {
   const session = await auth()

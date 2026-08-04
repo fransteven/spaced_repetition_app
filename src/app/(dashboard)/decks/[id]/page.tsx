@@ -7,13 +7,25 @@ import { listCardsForDeck } from '@/lib/services/card-service';
 import { getDeckDetailForUser } from '@/lib/services/deck-service';
 import { ServiceError } from '@/lib/services/service-error';
 
-export const metadata: Metadata = {
-  title: 'Deck — NeuroCards',
-};
-
 import { ArrowLeft } from 'lucide-react';
 
 type Props = { params: Promise<{ id: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const session = await auth();
+  if (!session?.user?.id) return { title: 'Mazo' };
+
+  const { id } = await params;
+  try {
+    const deck = await getDeckDetailForUser(session.user.id, id);
+    return {
+      title: deck.name,
+      description: deck.description || `Tarjetas y estudio de ${deck.name}`,
+    };
+  } catch {
+    return { title: 'Mazo' };
+  }
+}
 
 export default async function DeckDetailPage({ params }: Props): Promise<React.JSX.Element> {
   const session = await auth();

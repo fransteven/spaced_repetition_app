@@ -106,11 +106,6 @@ export function QuestionView({ card, sessionCounts, onShowAnswer, onEdit }: Prop
           </div>
         </div>
       </div>
-
-      {/* Decorative watermark */}
-      <div className="fixed bottom-12 left-12 pointer-events-none opacity-[0.03] select-none hidden lg:block">
-        <h3 className="text-9xl font-black italic">COLLECTION 04</h3>
-      </div>
     </>
   )
 }

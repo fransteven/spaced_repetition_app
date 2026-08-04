@@ -5,8 +5,8 @@ import { listSkills } from "@/lib/services/skill-service"
 import { SkillsManager } from "@/components/settings/skills-manager"
 
 export const metadata: Metadata = {
-  title: "Settings — NeuroCards",
-  description: "Manage your exam skills for the AI examiner",
+  title: "Configuración",
+  description: "Administra tus habilidades y configuración de NeuroCards",
 }
 
 export default async function SettingsPage(): Promise<React.JSX.Element> {

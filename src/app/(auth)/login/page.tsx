@@ -7,7 +7,8 @@ import { z } from "zod"
 import Link from "next/link"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Brain, AlertCircle, Eye, EyeOff } from "lucide-react"
+import { AlertCircle, Eye, EyeOff } from "lucide-react"
+import { AppLogo } from "@/components/ui/app-logo"
 
 const schema = z.object({
   email: z.string().email("Invalid email address"),
@@ -46,10 +47,7 @@ export default function SignInPage() {
       <main className="w-full max-w-[400px] px-6 py-12">
         {/* Branding */}
         <div className="flex flex-col items-center mb-10">
-          <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center mb-4 shadow-[0px_12px_32px_rgba(25,28,29,0.04)]">
-            <Brain className="text-on-primary h-7 w-7" />
-          </div>
-          <h1 className="text-xl font-extrabold tracking-tighter text-on-surface">NeuroCards</h1>
+          <AppLogo size="lg" href="/" />
         </div>
 
         {/* Login card */}

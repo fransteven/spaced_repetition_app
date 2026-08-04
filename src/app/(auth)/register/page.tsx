@@ -7,7 +7,8 @@ import { z } from "zod"
 import Link from "next/link"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Brain, AlertCircle, CheckCircle2, ArrowRight } from "lucide-react"
+import { AlertCircle, CheckCircle2, ArrowRight } from "lucide-react"
+import { AppLogo } from "@/components/ui/app-logo"
 
 const schema = z
   .object({
@@ -80,14 +81,7 @@ export default function SignUpPage() {
         <div className="w-full max-w-[400px] bg-surface-container-lowest rounded-xl shadow-[0px_12px_32px_rgba(25,28,29,0.04)] p-10 flex flex-col gap-8">
           {/* Branding */}
           <div className="flex flex-col items-center text-center gap-2">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-primary flex items-center justify-center rounded-lg">
-                <Brain className="text-on-primary h-6 w-6" />
-              </div>
-              <span className="text-xl font-extrabold text-primary tracking-tighter">
-                The Cognitive Atelier
-              </span>
-            </div>
+            <AppLogo size="lg" href="/" className="mb-2" />
             <h1 className="text-2xl font-bold tracking-tight text-on-surface">
               Create your account
             </h1>

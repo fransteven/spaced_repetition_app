@@ -1,13 +1,12 @@
 import Link from 'next/link'
 import { Search, Settings } from "lucide-react"
+import { AppLogo } from '@/components/ui/app-logo'
 
 export function TopNav() {
   return (
     <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-[12px] flex justify-between items-center px-4 sm:px-8 py-4 shadow-sm border-b border-outline-variant/10">
       <div className="flex items-center gap-8">
-        <Link href="/" className="text-xl font-bold text-primary tracking-tight">
-          NeuroCards
-        </Link>
+        <AppLogo size="sm" href="/" />
       </div>
 
       <div className="flex items-center gap-4">

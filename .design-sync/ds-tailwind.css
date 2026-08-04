@@ -1,0 +1,68 @@
+/* design-sync Tailwind entry.
+   The app compiles Tailwind v4 through PostCSS at `next build`, so there is no
+   shipped stylesheet. This file is the input to `.design-sync/build-css.mjs`,
+   which compiles it to `.design-sync/.cache/ds.css` (cfg.cssEntry).
+   It is the app's own globals.css plus:
+     · explicit @source roots (the app's components and the preview cells),
+     · --font-inter, which next/font sets at runtime in the real app, and
+     · a safelist: designs built with this DS are styled by THIS stylesheet, so
+       any utility a design agent writes must already be compiled here — not
+       just the ones the app happens to use today. */
+@import "../src/app/globals.css";
+
+@source "../src/components/**/*.{ts,tsx}";
+@source "../src/app/**/*.{ts,tsx}";
+@source "./previews/**/*.{ts,tsx}";
+
+:root {
+  --font-inter: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* ── Safelist: colour tokens ─────────────────────────────────────────────── */
+@source inline("{bg,text,border,ring,fill,stroke,outline,divide}-{background,foreground,card,card-foreground,popover,popover-foreground,primary,primary-foreground,secondary,secondary-foreground,muted,muted-foreground,accent,accent-foreground,destructive,border,input,ring}");
+@source inline("{bg,text,border,ring,fill,stroke}-{surface,surface-bright,surface-dim,surface-tint,surface-variant,surface-container-lowest,surface-container-low,surface-container,surface-container-high,surface-container-highest}");
+@source inline("{bg,text,border,ring,fill,stroke}-{on-surface,on-surface-variant,on-background,inverse-surface,inverse-on-surface,inverse-primary}");
+@source inline("{bg,text,border,ring,fill,stroke}-{on-primary,primary-container,on-primary-container,primary-fixed,primary-fixed-dim,on-primary-fixed,on-primary-fixed-variant}");
+@source inline("{bg,text,border,ring,fill,stroke}-{on-secondary,secondary-container,on-secondary-container,secondary-fixed,secondary-fixed-dim}");
+@source inline("{bg,text,border,ring,fill,stroke}-{tertiary,on-tertiary,tertiary-container,on-tertiary-container,tertiary-fixed,tertiary-fixed-dim}");
+@source inline("{bg,text,border,ring,fill,stroke}-{error,on-error,error-container,on-error-container,outline,outline-variant}");
+
+/* Alpha steps — the DS leans on token/NN for tints, tinted borders and rings. */
+@source inline("{hover:,dark:,}{bg,text,border,ring}-{primary,primary-container,secondary,tertiary,error,destructive,muted,accent,on-surface,on-surface-variant,outline,outline-variant,surface-container-low,surface-container-high,surface-container-highest,foreground,background}/{5,10,15,20,25,30,40,50,60,70,75,80,90,95}");
+@source inline("border-{l,t,r,b}-{primary,secondary,tertiary,error,destructive,outline,outline-variant,border}");
+
+/* ── Safelist: layout + type scale ───────────────────────────────────────── */
+@source inline("{p,px,py,pt,pb,pl,pr,m,mx,my,mt,mb,ml,mr,gap,gap-x,gap-y,space-y,space-x}-{0,0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,11,12,14,16,20,24,28,32,40}");
+@source inline("text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl}");
+@source inline("font-{light,normal,medium,semibold,bold,extrabold,black}");
+@source inline("tracking-{tighter,tight,normal,wide,wider,widest}");
+@source inline("leading-{none,tight,snug,normal,relaxed,loose}");
+@source inline("rounded-{none,sm,md,lg,xl,2xl,3xl,4xl,full}");
+@source inline("{w,h,min-w,min-h,size}-{0,1,2,3,4,5,6,7,8,9,10,11,12,14,16,20,24,32,40,48,56,64,full,fit,px,auto,screen}");
+@source inline("max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl,full,fit,prose,none}");
+@source inline("{grid-cols,col-span}-{1,2,3,4,5,6,7,8,12}");
+@source inline("{sm:,md:,lg:,xl:,}{grid-cols}-{1,2,3,4,5,6}");
+@source inline("{flex,inline-flex,grid,inline-grid,block,inline-block,inline,hidden,contents}");
+@source inline("{sm:,md:,lg:,xl:,}{flex,grid,block,hidden,inline-flex}");
+@source inline("flex-{row,row-reverse,col,col-reverse,wrap,nowrap,1,auto,initial,none}");
+@source inline("items-{start,end,center,baseline,stretch}");
+@source inline("justify-{start,end,center,between,around,evenly}");
+@source inline("self-{auto,start,end,center,stretch}");
+@source inline("{relative,absolute,fixed,sticky,static}");
+@source inline("{top,bottom,left,right,inset}-{0,1,2,3,4,6,8,auto,full}");
+@source inline("z-{0,10,20,30,40,50,auto}");
+@source inline("overflow-{auto,hidden,visible,scroll,x-auto,y-auto,x-hidden,y-hidden}");
+@source inline("{truncate,uppercase,lowercase,capitalize,italic,not-italic,underline,no-underline,line-through,antialiased,select-none,cursor-pointer,cursor-default,cursor-not-allowed,pointer-events-none,sr-only}");
+@source inline("text-{left,center,right,justify}");
+@source inline("shadow-{none,xs,sm,md,lg,xl,2xl,inner}");
+@source inline("{opacity}-{0,5,10,20,25,30,40,50,60,70,75,80,90,95,100}");
+@source inline("{transition,transition-all,transition-colors,transition-opacity,transition-transform,transition-shadow}");
+@source inline("duration-{75,100,150,200,300,500,700,1000}");
+@source inline("ease-{linear,in,out,in-out}");
+@source inline("backdrop-blur-{none,xs,sm,md,lg,xl,2xl,3xl}");
+@source inline("blur-{none,xs,sm,md,lg,xl,2xl,3xl}");
+@source inline("{border,border-0,border-2,border-4,border-8,border-t,border-b,border-l,border-r,border-x,border-y,border-solid,border-dashed,border-dotted}");
+@source inline("{ring,ring-0,ring-1,ring-2,ring-3,ring-4,ring-inset}");
+@source inline("aspect-{auto,square,video}");
+@source inline("object-{contain,cover,fill,none,scale-down}");
+@source inline("{whitespace-nowrap,whitespace-normal,break-words,break-all,tabular-nums}");

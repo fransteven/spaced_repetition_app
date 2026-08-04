@@ -5,8 +5,8 @@ import { DeckList } from '@/components/decks/DeckList';
 import { listDecksForUserPage } from '@/lib/services/deck-service';
 
 export const metadata: Metadata = {
-  title: 'My Decks — NeuroCards',
-  description: 'Manage your flashcard decks',
+  title: 'Mis Mazos',
+  description: 'Administra tus mazos de estudio y tarjetas de memoria',
 };
 
 export default async function DecksPage(): Promise<React.JSX.Element> {

@@ -10,8 +10,8 @@ import { TimelineList } from '@/components/dashboard/timeline-list';
 import { Languages, Atom, Calculator, BookOpen, Layers, ArrowRight, Plus } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Dashboard — NeuroCards',
-  description: 'Your spaced repetition study overview',
+  title: 'Dashboard',
+  description: 'Resumen de estudio y tarjetas pendientes',
 };
 
 const SUBJECT_ICON = {
