@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { z } from 'zod';
+
 import {
   Dialog,
   DialogBackdrop,
@@ -15,16 +15,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-
-import { UpdateDeckSchema } from '@/lib/validations';
+import { DeckForm, type DeckFormValues } from '@/components/decks/DeckForm';
+import { CreateDeckSchema } from '@/lib/validations';
+import { unwrapError } from '@/lib/api-envelope';
 import type { DeckWithStats } from '@/components/decks/DeckCard';
-
-type EditDeckFormValues = z.infer<typeof UpdateDeckSchema>;
-
-
 
 interface EditDeckDialogProps {
   open: boolean;
@@ -39,19 +33,24 @@ export function EditDeckDialog({
 }: EditDeckDialogProps): React.JSX.Element {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<EditDeckFormValues>({
-    resolver: zodResolver(UpdateDeckSchema),
+
+  // Edit validates against the create schema on purpose: the form always sends
+  // all three fields, so the looser UpdateDeckSchema would let an empty name
+  // through the client and only fail server-side.
+  const form = useForm<DeckFormValues>({
+    resolver: zodResolver(CreateDeckSchema),
     defaultValues: {
       name: initialValues.name,
       description: initialValues.description ?? '',
       subject: initialValues.subject,
     },
   });
+
+  const {
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = form;
 
   const [prevId, setPrevId] = useState(initialValues.id);
   if (initialValues.id !== prevId) {
@@ -67,34 +66,18 @@ export function EditDeckDialog({
     });
   }, [initialValues.description, initialValues.name, initialValues.subject, reset]);
 
-  const onSubmit = async (data: EditDeckFormValues): Promise<void> => {
+  const onSubmit = async (data: DeckFormValues): Promise<void> => {
     setSubmitError(null);
-
-    const parsed = UpdateDeckSchema.safeParse(data);
-
-    if (!parsed.success) {
-      return;
-    }
 
     const response = await fetch(`/api/decks/${initialValues.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(parsed.data),
+      body: JSON.stringify(data),
     });
     const json: unknown = await response.json();
 
     if (!response.ok) {
-      const message =
-        typeof json === 'object' &&
-        json !== null &&
-        'error' in json &&
-        typeof json.error === 'object' &&
-        json.error !== null &&
-        'message' in json.error &&
-        typeof json.error.message === 'string'
-          ? json.error.message
-          : 'Unable to update deck';
-      setSubmitError(message);
+      setSubmitError(unwrapError(json, 'Unable to update deck'));
       return;
     }
 
@@ -110,44 +93,10 @@ export function EditDeckDialog({
           <DialogTitle>Edit deck</DialogTitle>
           <DialogDescription>Update your deck details.</DialogDescription>
 
-          {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+          {submitError && <p className="text-body-sm text-destructive">{submitError}</p>}
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="edit-deck-name">Name</Label>
-              <Input
-                id="edit-deck-name"
-                placeholder="e.g. Neuroanatomy Basics"
-                aria-invalid={Boolean(errors.name)}
-                {...register('name')}
-              />
-              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="edit-deck-description">Description</Label>
-              <Textarea
-                id="edit-deck-description"
-                rows={3}
-                placeholder="What will you study?"
-                aria-invalid={Boolean(errors.description)}
-                {...register('description')}
-              />
-              {errors.description && (
-                <p className="text-sm text-destructive">{errors.description.message}</p>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="edit-deck-subject">Subject</Label>
-              <Input
-                id="edit-deck-subject"
-                placeholder="e.g. Science, Languages, etc."
-                aria-invalid={Boolean(errors.subject)}
-                {...register('subject')}
-              />
-              {errors.subject && <p className="text-sm text-destructive">{errors.subject.message}</p>}
-            </div>
+            <DeckForm form={form} idPrefix="edit-deck" open={open} />
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <DialogClose className="px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground">

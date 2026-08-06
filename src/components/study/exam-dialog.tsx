@@ -130,7 +130,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
         <DialogPopup className="sm:max-w-lg flex flex-col max-h-[85vh]">
           <div className="flex items-center gap-2 mb-1">
             <GraduationCap className="h-5 w-5 text-primary" />
-            <DialogTitle className="mb-0">Examíname</DialogTitle>
+            <DialogTitle className="mb-0">Quiz me</DialogTitle>
           </div>
           <DialogDescription>
             An AI tutor will pick a skill and quiz you on this card. Its verdict sets the rating.
@@ -162,7 +162,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
 
           {error && (
             <div className="flex items-center justify-between gap-3 bg-error-container px-3 py-2 rounded-lg mb-2">
-              <p className="text-sm text-error">{error}</p>
+              <p className="text-sm text-on-error-container">{error}</p>
               <Button
                 onClick={handleRetry}
                 disabled={loading}
@@ -170,7 +170,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
                 variant="secondary"
                 className="shrink-0"
               >
-                Reintentar
+                Retry
               </Button>
             </div>
           )}
@@ -187,7 +187,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
               </div>
               <p className="text-sm text-on-surface-variant leading-relaxed">{verdict.feedback}</p>
               <Button onClick={handleContinue} className="w-full">
-                Continuar
+                Continue
               </Button>
             </div>
           ) : (

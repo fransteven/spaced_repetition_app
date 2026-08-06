@@ -1,28 +1,26 @@
 import type { Metadata } from "next"
 import { redirect, notFound } from "next/navigation"
-import Link from "next/link"
 import { auth } from "@/lib/auth"
 import { getStudySession } from "@/lib/services/study-service"
 import { ServiceError } from "@/lib/services/service-error"
 import { StudySession } from "@/components/study/study-session"
-
-import { CheckCircle2 } from "lucide-react"
+import { StudyOutcome } from "@/components/study/study-outcome"
 
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const session = await auth()
-  if (!session?.user?.id) return { title: "Estudio" }
+  if (!session?.user?.id) return { title: "Study — NeuroCards" }
 
   const { id } = await params
   try {
     const data = await getStudySession(session.user.id, id)
     return {
-      title: `Estudiando: ${data.deckName}`,
-      description: `Sesión de repetición espaciada para ${data.deckName}`,
+      title: `Studying: ${data.deckName} — NeuroCards`,
+      description: `Spaced repetition session for ${data.deckName}`,
     }
   } catch {
-    return { title: "Estudio" }
+    return { title: "Study — NeuroCards" }
   }
 }
 
@@ -44,23 +42,7 @@ export default async function StudyPage({ params }: Props): Promise<React.JSX.El
   }
 
   if (data.cards.length === 0) {
-    return (
-      <div className="bg-surface text-on-surface min-h-screen flex flex-col items-center justify-center gap-8 px-6">
-        <div className="text-center space-y-4">
-          <CheckCircle2 className="h-16 w-16 text-tertiary mx-auto" />
-          <h1 className="text-3xl font-bold text-primary tracking-tight">{"You're all caught up"}</h1>
-          <p className="text-on-surface-variant text-sm">
-            No cards due for review right now. Come back later!
-          </p>
-        </div>
-        <Link
-          href={`/decks/${id}`}
-          className="px-6 py-3 bg-primary text-on-primary rounded-lg font-semibold hover:bg-primary-container transition-colors"
-        >
-          Back to deck
-        </Link>
-      </div>
-    )
+    return <StudyOutcome variant="caught-up" deckId={id} />
   }
 
   return <StudySession deckId={id} deckName={data.deckName} initialCards={data.cards} />

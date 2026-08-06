@@ -27,7 +27,6 @@ export * from '@/components/dashboard/timeline-list';
 export * from '@/components/dashboard/activity-heatmap';
 
 // ── Reminders ──────────────────────────────────────────────────────────────
-export * from '@/components/reminders/bucket-row';
 export * from '@/components/reminders/empty-state-card';
 export * from '@/components/reminders/program-card';
 

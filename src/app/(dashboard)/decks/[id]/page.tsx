@@ -2,28 +2,31 @@ import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+
 import { CardList } from '@/components/cards/CardList';
+import { Pill } from '@/components/primitives/pill';
+import { PageHeader, PageSection } from '@/components/layout/page-header';
+import { formatSubject, subjectAccent } from '@/lib/subject-accent';
 import { listCardsForDeck } from '@/lib/services/card-service';
 import { getDeckDetailForUser } from '@/lib/services/deck-service';
 import { ServiceError } from '@/lib/services/service-error';
-
-import { ArrowLeft } from 'lucide-react';
 
 type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const session = await auth();
-  if (!session?.user?.id) return { title: 'Mazo' };
+  if (!session?.user?.id) return { title: 'Deck — NeuroCards' };
 
   const { id } = await params;
   try {
     const deck = await getDeckDetailForUser(session.user.id, id);
     return {
-      title: deck.name,
-      description: deck.description || `Tarjetas y estudio de ${deck.name}`,
+      title: `${deck.name} — NeuroCards`,
+      description: deck.description || `Cards and study progress for ${deck.name}`,
     };
   } catch {
-    return { title: 'Mazo' };
+    return { title: 'Deck — NeuroCards' };
   }
 }
 
@@ -37,50 +40,69 @@ export default async function DeckDetailPage({ params }: Props): Promise<React.J
   let deckCards: Awaited<ReturnType<typeof listCardsForDeck>>;
 
   try {
-    deck = await getDeckDetailForUser(session.user.id, id);
-    deckCards = await listCardsForDeck(session.user.id, id);
+    [deck, deckCards] = await Promise.all([
+      getDeckDetailForUser(session.user.id, id),
+      listCardsForDeck(session.user.id, id),
+    ]);
   } catch (error) {
-    if (error instanceof ServiceError && error.code === 'NOT_FOUND') {
+    // FORBIDDEN is answered as 404 too — a non-owner should not learn that the
+    // deck exists.
+    if (error instanceof ServiceError && (error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN')) {
       notFound();
     }
 
     throw error;
   }
 
-  const subjectLabel = deck.subject.charAt(0).toUpperCase() + deck.subject.slice(1);
+  const accent = subjectAccent(deck.subject);
+  const mastery = deck.total_cards > 0 ? Math.round((deck.mastered_count / deck.total_cards) * 100) : 0;
 
   return (
     <>
-      <header className="max-w-7xl mx-auto mb-10">
+      <PageHeader>
         <Link
           href="/decks"
-          className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary transition-colors mb-4"
+          className="mb-4 inline-flex items-center gap-1 text-body-md text-on-surface-variant transition-colors hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-          My Decks
+          My decks
         </Link>
 
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
-            <span className="inline-block px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-full bg-surface-container-low text-primary mb-3">
-              {subjectLabel}
-            </span>
-            <h1 className="text-[2.5rem] font-extrabold tracking-tight text-on-surface leading-none mb-2">
-              {deck.name}
-            </h1>
+            <Pill className={`${accent.pill} mb-3`}>{formatSubject(deck.subject)}</Pill>
+            <h1 className="mb-2 text-display-md text-on-surface">{deck.name}</h1>
             {deck.description && (
-              <p className="text-on-surface-variant max-w-lg">{deck.description}</p>
+              <p className="max-w-lg text-body-lg text-on-surface-variant">{deck.description}</p>
             )}
           </div>
-          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-            <span className="font-semibold text-on-surface">{deckCards.length}</span> cards
+
+          <div className="w-full max-w-xs space-y-2">
+            <div className="flex justify-between text-label-sm text-on-surface-variant uppercase">
+              <span>Mastery progress</span>
+              <span>{mastery}%</span>
+            </div>
+            <div className="h-0.5 w-full overflow-hidden rounded-full bg-surface-container-high">
+              <div className="h-full bg-tertiary" style={{ width: `${mastery}%` }} />
+            </div>
+            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
+              <li className="text-label-sm text-on-surface-variant uppercase">
+                {deck.total_cards} cards
+              </li>
+              <li className="text-label-sm text-on-surface-variant uppercase">
+                {deck.due_count} due
+              </li>
+              <li className="text-label-sm text-on-surface-variant uppercase">
+                {deck.mastered_count} mastered
+              </li>
+            </ul>
           </div>
         </div>
-      </header>
+      </PageHeader>
 
-      <div className="max-w-7xl mx-auto">
+      <PageSection>
         <CardList deckId={id} initialCards={deckCards} />
-      </div>
+      </PageSection>
     </>
   );
 }

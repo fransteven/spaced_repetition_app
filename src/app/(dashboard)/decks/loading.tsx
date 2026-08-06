@@ -1,61 +1,61 @@
+import { PageHeader, PageSection } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Surface } from '@/components/primitives/surface';
+
+// Wrappers must match decks/page.tsx exactly, or the layout shifts on hydration.
 export default function DecksLoading() {
   return (
-    <div className="max-w-7xl mx-auto space-y-10">
-      {/* Header skeleton */}
-      <header className="max-w-7xl mx-auto mb-10 space-y-3">
-        <div className="h-12 w-48 bg-surface-container-high rounded animate-pulse" />
-        <div className="h-5 w-96 bg-surface-container-low rounded animate-pulse" />
-      </header>
+    <>
+      <PageHeader className="space-y-3">
+        <Skeleton className="h-14 w-64" />
+        <Skeleton className="h-6 w-96 max-w-full" />
+      </PageHeader>
 
-      {/* Filter and search bar skeleton */}
-      <section className="bg-surface-container-low p-2 rounded-xl flex flex-col sm:flex-row items-center gap-3 w-full animate-pulse">
-        <div className="flex gap-2 w-full sm:w-auto">
+      <PageSection className="mb-8 flex flex-col flex-wrap items-center gap-3 rounded-xl bg-surface-container-low p-2 sm:flex-row">
+        <div className="flex w-full gap-2 sm:w-auto">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-10 w-20 bg-surface-container-high rounded-lg" />
+            <Skeleton key={i} className="h-8 w-20 rounded-lg" />
           ))}
         </div>
-        <div className="h-10 w-full sm:w-64 bg-surface-container-lowest rounded-lg sm:ml-auto" />
-        <div className="h-10 w-full sm:w-32 bg-surface-container-high rounded-lg" />
-      </section>
+        <Skeleton className="h-9 w-full rounded-lg sm:ml-auto sm:w-48 md:w-64" />
+        <Skeleton className="h-8 w-full rounded-lg sm:w-28" />
+      </PageSection>
 
-      {/* Decks grid skeleton */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <PageSection className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div
-            key={i}
-            className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/5 flex flex-col justify-between min-h-[280px] shadow-[0px_12px_32px_rgba(25,28,29,0.02)] animate-pulse"
-          >
+          <Surface key={i} ghost className="flex min-h-[280px] flex-col justify-between p-6">
             <div>
               <div className="mb-4 flex items-start justify-between">
-                <div className="h-6 w-20 bg-surface-container-low rounded-full" />
-                <div className="h-8 w-8 bg-surface-container-low rounded-full" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-7 w-7 rounded-full" />
               </div>
-              <div className="h-7 w-3/4 bg-surface-container-high rounded mb-2" />
-              <div className="h-4 w-1/3 bg-surface-container-low rounded mb-6" />
+              <Skeleton className="mb-2 h-7 w-3/4" />
+              <Skeleton className="mb-3 h-4 w-full" />
+              <Skeleton className="mb-6 h-4 w-1/3" />
 
-              <div className="space-y-4 mb-8">
+              <div className="mb-8 space-y-4">
                 <div>
-                  <div className="flex justify-between mb-2">
-                    <div className="h-3 w-20 bg-surface-container-low rounded" />
-                    <div className="h-3 w-8 bg-surface-container-low rounded" />
+                  <div className="mb-2 flex justify-between">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-8" />
                   </div>
-                  <div className="h-1 w-full bg-surface-container-low rounded-full" />
+                  <Skeleton className="h-0.5 w-full rounded-full" />
                 </div>
                 <div className="flex gap-4">
-                  <div className="h-3 w-8 bg-surface-container-low rounded-full" />
-                  <div className="h-3 w-8 bg-surface-container-low rounded-full" />
-                  <div className="h-3 w-8 bg-surface-container-low rounded-full" />
+                  <Skeleton className="h-3 w-16 rounded-full" />
+                  <Skeleton className="h-3 w-20 rounded-full" />
+                  <Skeleton className="h-3 w-20 rounded-full" />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-outline-variant/5">
-              <div className="h-4 w-32 bg-surface-container-low rounded" />
-              <div className="h-10 w-28 bg-surface-container-high rounded-lg" />
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-8 w-28 rounded-lg" />
             </div>
-          </div>
+          </Surface>
         ))}
-      </div>
-    </div>
+      </PageSection>
+    </>
   );
 }

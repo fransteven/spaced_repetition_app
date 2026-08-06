@@ -1,44 +1,69 @@
 "use client"
 
-import { useState, useEffect, useCallback, useTransition } from "react"
-import Link from "next/link"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
+import { ArrowLeft, Command } from "lucide-react"
+
+import { cn } from "@/lib/utils"
 import type { StudyCardItem } from "@/lib/services/study-service"
 import type { FsrsRating } from "@/lib/fsrs/types"
-import { QuestionView } from "./question-view"
-import { AnswerView } from "./answer-view"
-import { CheckCircle2, ArrowLeft, Command } from "lucide-react"
+import type { CardData } from "@/lib/validations"
 import { CardEditor } from "@/components/cards/CardEditor"
 import { ExamDialog } from "@/components/study/exam-dialog"
-import type { CardData } from "@/lib/validations"
+import { StudyCard } from "@/components/study/study-card"
+import { StudyOutcome } from "@/components/study/study-outcome"
+import { unwrapError } from "@/lib/api-envelope"
+import { useStudyHotkeys } from "@/hooks/use-study-hotkeys"
 
 type SessionCounts = Record<FsrsRating, number>
 
 interface Props {
-  deckId:       string
-  deckName:     string
+  deckId: string
+  deckName: string
   initialCards: StudyCardItem[]
 }
 
 export function StudySession({ deckId, deckName, initialCards }: Props) {
-  const [cards,      setCards]      = useState<StudyCardItem[]>(initialCards)
+  const [cards, setCards] = useState<StudyCardItem[]>(initialCards)
   const [currentIdx, setCurrentIdx] = useState(0)
-  const [view,       setView]       = useState<"question" | "answer">("question")
-  const [counts,     setCounts]     = useState<SessionCounts>({ again: 0, hard: 0, good: 0, easy: 0 })
-  const [isPending,  startTransition] = useTransition()
-  const [rateError,  setRateError]  = useState<string | null>(null)
+  const [revealed, setRevealed] = useState(false)
+  const [counts, setCounts] = useState<SessionCounts>({ again: 0, hard: 0, good: 0, easy: 0 })
+  const [isPending, startTransition] = useTransition()
+  const [rateError, setRateError] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [editCard,   setEditCard]   = useState<CardData | null>(null)
-  const [examOpen,   setExamOpen]   = useState(false)
+  const [editCard, setEditCard] = useState<CardData | null>(null)
+  const [examOpen, setExamOpen] = useState(false)
+
+  // Progress denominators are frozen at mount. `again` cards get re-appended to
+  // `cards`, so a denominator of `cards.length` grows mid-session and makes the
+  // bar visually regress.
+  const [sessionTotal] = useState(initialCards.length)
+  const reviewedIds = useRef<Set<string>>(new Set())
+  const [reviewedCount, setReviewedCount] = useState(0)
+  const [progressPct, setProgressPct] = useState(0)
+
+  // Clock reads stay out of render: the ref is stamped on mount and elapsed
+  // time is recomputed inside the rating handler.
+  const startedAt = useRef<number | null>(null)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  useEffect(() => {
+    startedAt.current = Date.now()
+  }, [])
+
+  const total = cards.length
+  const done = currentIdx >= total
+  const currentCard = done ? null : cards[currentIdx]
+  const remaining = Math.max(0, total - currentIdx - 1)
+  const requeued = Math.max(0, total - sessionTotal)
 
   const handleEditClick = () => {
     if (!currentCard) return
     setEditCard({
-      id:          currentCard.card_id,
-      front:       currentCard.front,
-      back:        currentCard.back,
+      id: currentCard.card_id,
+      front: currentCard.front,
+      back: currentCard.back,
       image_url_1: currentCard.image_url_1,
       image_url_2: currentCard.image_url_2,
-      tags:        [],
+      tags: [],
     })
     setEditorOpen(true)
   }
@@ -66,158 +91,141 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
     )
   }
 
-  const total       = cards.length
-  const done        = currentIdx >= total
-  const currentCard = done ? null : cards[currentIdx]
-  const remaining   = Math.max(0, total - currentIdx - 1)
-  const progressPct = total > 0 ? (currentIdx / total) * 100 : 0
+  const handleRate = useCallback(
+    async (rating: FsrsRating) => {
+      if (!currentCard || isPending) return
+      setRateError(null)
 
-  const handleRate = useCallback(async (rating: FsrsRating) => {
-    if (!currentCard || isPending) return
-    setRateError(null)
+      startTransition(async () => {
+        try {
+          const res = await fetch("/api/study/review", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ card_id: currentCard.card_id, rating }),
+          })
+          const json: unknown = await res.json()
 
-    startTransition(async () => {
-      try {
-        const res  = await fetch("/api/study/review", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ card_id: currentCard.card_id, rating }),
-        })
-        const json = await res.json()
+          if (!res.ok) {
+            setRateError(unwrapError(json, "Failed to submit review"))
+            return
+          }
 
-        if (!res.ok) {
-          setRateError(json?.error?.message ?? "Failed to submit review")
-          return
+          setCounts((prev) => ({ ...prev, [rating]: prev[rating] + 1 }))
+          setElapsedMs(Date.now() - (startedAt.current ?? Date.now()))
+
+          reviewedIds.current.add(currentCard.card_id)
+          setReviewedCount(reviewedIds.current.size)
+          const next = (reviewedIds.current.size / Math.max(1, sessionTotal)) * 100
+          // Monotonic by construction — the bar can only ever move forward.
+          setProgressPct((prev) => Math.min(100, Math.max(prev, next)))
+
+          if (rating === "again") {
+            // Re-queue for a second pass in this same session.
+            setCards((prev) => [...prev, { ...currentCard }])
+          }
+
+          setCurrentIdx((prev) => prev + 1)
+          setRevealed(false)
+        } catch (err) {
+          console.error("[StudySession rating]", err)
+          setRateError("An unexpected error occurred.")
         }
+      })
+    },
+    [currentCard, isPending, sessionTotal]
+  )
 
-        setCounts(prev => ({ ...prev, [rating]: prev[rating] + 1 }))
+  const toggleReveal = useCallback(() => setRevealed((prev) => !prev), [])
 
-        if (rating === "again") {
-          // Append card to queue end for same-session re-review
-          setCards(prev => [...prev, { ...currentCard }])
-        }
-
-        setCurrentIdx(prev => prev + 1)
-        setView("question")
-      } catch (err) {
-        console.error('[StudySession rating]', err)
-        setRateError("An unexpected error occurred.")
-      }
-    })
-  }, [currentCard, isPending])
-
-  // Keyboard shortcuts 1–4 → Again/Hard/Good/Easy
-  useEffect(() => {
-    if (view !== "answer" || isPending) return
-    const RATING_KEYS: Record<string, FsrsRating> = { "1": "again", "2": "hard", "3": "good", "4": "easy" }
-    const handler = (e: KeyboardEvent) => {
-      const r = RATING_KEYS[e.key]
-      if (r) handleRate(r)
-    }
-    window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
-  }, [view, isPending, handleRate])
+  useStudyHotkeys({
+    revealed,
+    disabled: isPending || examOpen || editorOpen || done,
+    onToggleReveal: toggleReveal,
+    onRate: handleRate,
+  })
 
   if (done) {
-    const recalled = counts.easy + counts.good
     return (
-      <div className="bg-surface text-on-surface min-h-screen flex flex-col items-center justify-center gap-8 px-6">
-        <div className="text-center space-y-4">
-          <CheckCircle2 className="h-16 w-16 text-tertiary mx-auto" />
-          <h1 className="text-3xl font-bold text-primary tracking-tight">Session complete</h1>
-          <p className="text-on-surface-variant text-sm">
-            {recalled} recalled &nbsp;·&nbsp; {counts.hard} hard &nbsp;·&nbsp; {counts.again} missed
-          </p>
-        </div>
-        <Link
-          href={`/decks/${deckId}`}
-          className="px-6 py-3 bg-primary text-on-primary rounded-lg font-semibold hover:bg-primary-container transition-colors cursor-pointer"
-        >
-          Back to deck
-        </Link>
-      </div>
+      <StudyOutcome
+        variant="complete"
+        deckId={deckId}
+        stats={{
+          recalled: counts.easy + counts.good,
+          hard: counts.hard,
+          again: counts.again,
+          total: counts.again + counts.hard + counts.good + counts.easy,
+          elapsedMs,
+        }}
+      />
     )
   }
 
   return (
-    <div className="bg-surface text-on-surface min-h-screen flex flex-col">
-      {/* Nav */}
+    <div className="flex min-h-screen flex-col bg-surface text-on-surface">
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-[12px]">
-        <div className="relative flex justify-between items-center w-full px-4 sm:px-8 py-4 max-w-screen-2xl mx-auto">
+        <div className="relative mx-auto flex w-full max-w-screen-2xl items-center justify-between px-4 py-4 sm:px-8">
           <button
             onClick={() => window.history.back()}
-            className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+            className="flex cursor-pointer items-center gap-2 text-on-surface-variant transition-colors hover:text-primary"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="font-medium text-sm">Exit</span>
+            <span className="text-sm font-medium">Exit</span>
           </button>
 
-          <h1 className="absolute left-1/2 -translate-x-1/2 text-sm sm:text-lg font-bold text-primary tracking-tight truncate max-w-[150px] sm:max-w-xs">
+          <h1 className="absolute left-1/2 max-w-[150px] -translate-x-1/2 truncate text-headline-sm text-primary sm:max-w-xs">
             {deckName}
           </h1>
 
-          <span className="text-on-surface-variant font-medium text-xs sm:text-sm">
-            {view === "question"
-              ? `${currentIdx + 1} / ${total}`
-              : `${Math.round(progressPct)}%`}
+          <span className="text-body-sm font-medium text-on-surface-variant">
+            {reviewedCount} / {sessionTotal}
           </span>
         </div>
 
-        <div className="w-full h-[2px] bg-surface-container-high overflow-hidden">
+        {/* 2px thread — DESIGN.md §5 */}
+        <div className="h-[2px] w-full overflow-hidden bg-surface-container-high">
           <div
-            className={`h-full transition-all duration-500 ${view === "question" ? "bg-primary" : "bg-tertiary"} ${isPending ? 'animate-pulse' : ''}`}
+            className={cn(
+              "h-full bg-tertiary transition-all duration-500",
+              isPending && "animate-pulse"
+            )}
             style={{ width: `${progressPct}%` }}
           />
         </div>
       </nav>
 
-      {/* Main */}
-      <main className="flex-grow flex flex-col items-center px-4 sm:px-6 py-6 sm:py-8">
+      <main className="flex flex-grow flex-col items-center px-4 py-6 sm:px-6 sm:py-8">
         {rateError && (
-          <p className="mb-4 text-sm text-error bg-error-container px-4 py-2 rounded-lg">{rateError}</p>
+          <p className="mb-4 rounded-lg bg-error-container px-4 py-2 text-body-md text-on-error-container">
+            {rateError}
+          </p>
         )}
-        {view === "question" ? (
-          <QuestionView
-            card={currentCard!}
-            sessionCounts={counts}
-            onShowAnswer={() => setView("answer")}
-            onEdit={handleEditClick}
-          />
-        ) : (
-          <AnswerView
-            card={currentCard!}
-            onRate={handleRate}
-            isRating={isPending}
-            onEdit={handleEditClick}
-            onExam={() => setExamOpen(true)}
-          />
-        )}
+
+        <StudyCard
+          card={currentCard!}
+          sessionCounts={counts}
+          revealed={revealed}
+          onToggleReveal={toggleReveal}
+          onRate={handleRate}
+          isRating={isPending}
+          onEdit={handleEditClick}
+          onExam={() => setExamOpen(true)}
+        />
       </main>
- 
-      {/* Footer */}
-      {view === "answer" ? (
-        <footer className="pb-10 pt-4">
-          <div className="max-w-screen-2xl mx-auto px-8 flex justify-between items-center text-on-surface-variant/40">
-            <div className="flex items-center gap-2">
-              <Command className="h-4 w-4" />
-              <span className="text-[11px] font-medium tracking-wider uppercase">
-                Hotkeys: 1, 2, 3, 4
-              </span>
-            </div>
-            <span className="text-[11px] font-medium tracking-wider uppercase">
-              {remaining} Cards Left
+
+      <footer className="px-8 pt-4 pb-10">
+        <div className="mx-auto flex max-w-screen-2xl items-center justify-between text-on-surface-variant/40">
+          <div className="flex items-center gap-2">
+            <Command className="h-4 w-4" />
+            <span className="text-label-sm uppercase">
+              {revealed ? "Hotkeys: 1, 2, 3, 4 · Space to hide" : "Space to reveal"}
             </span>
           </div>
-        </footer>
-      ) : (
-        <footer className="py-8 flex justify-center opacity-30 pointer-events-none">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium tracking-tighter">THE COGNITIVE ATELIER</span>
-            <span className="w-1 h-1 bg-on-surface rounded-full" />
-            <span className="text-xs font-medium">EST 2024</span>
-          </div>
-        </footer>
-      )}
+          <span className="text-label-sm uppercase">
+            {remaining} cards left
+            {requeued > 0 && ` · ${requeued} to redo`}
+          </span>
+        </div>
+      </footer>
 
       <CardEditor
         open={editorOpen}

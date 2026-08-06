@@ -1,29 +1,39 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { FolderPlus, Plus } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
+
+import { Surface } from '@/components/primitives/surface';
 
 interface EmptyDeckCardProps {
   onClick: () => void;
 }
 
+/**
+ * Celebrated empty state — DESIGN.md §6. Rendered only when the user has no
+ * decks at all, never as a filler tile inside a populated grid.
+ *
+ * It is a single `<button>`: the previous `<div onClick>` had no role, no
+ * keyboard handler, and nested another button inside itself.
+ */
 export function EmptyDeckCard({ onClick }: EmptyDeckCardProps): React.JSX.Element {
   return (
-    <div
+    <Surface
+      as="button"
+      tone="panel"
+      interactive
+      type="button"
       onClick={onClick}
-      className="border-2 border-dashed border-outline-variant bg-surface-container-low/30 rounded-xl p-6 flex flex-col items-center justify-center text-center min-h-[280px] hover:bg-surface-container-low transition-all group cursor-pointer"
+      className="flex w-full cursor-pointer flex-col items-center justify-center px-6 py-24 text-center"
     >
-      <div className="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-        <FolderPlus className="h-8 w-8 text-primary" />
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-surface-container-highest">
+        <FolderPlus className="h-9 w-9 text-primary" />
       </div>
-      <h3 className="text-lg font-bold text-on-surface mb-2">Create your first deck</h3>
-      <p className="text-sm text-on-surface-variant max-w-[200px] mb-6">
-        Start your learning journey by building a customized intellectual stack.
+      <h2 className="mb-3 text-display-sm text-on-surface">Mental space</h2>
+      <p className="max-w-sm text-body-lg text-on-surface-variant">
+        Nothing to review yet. Build your first intellectual stack and the schedule takes care of
+        itself.
       </p>
-      <Button type="button" variant="ghost" className="text-primary">
-        <Plus className="h-4 w-4 mr-1" />
-        Get started
-      </Button>
-    </div>
+      <span className="mt-6 text-label-md text-primary uppercase">Create your first deck</span>
+    </Surface>
   );
 }

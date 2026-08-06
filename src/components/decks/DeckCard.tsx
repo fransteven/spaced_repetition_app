@@ -1,8 +1,28 @@
 'use client';
 
 import Link from 'next/link';
+import {
+  ArrowRight,
+  MoreHorizontal,
+  Pencil,
+  PlusCircle,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
+
+import { cn } from '@/lib/utils';
+import { formatSubject, subjectAccent } from '@/lib/subject-accent';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { MoreHorizontal, Pencil, PlusCircle, Trash2, ArrowRight, RefreshCw, RotateCcw } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Pill } from '@/components/primitives/pill';
+import { Surface } from '@/components/primitives/surface';
 
 export interface DeckWithStats {
   id: string;
@@ -19,9 +39,6 @@ export interface DeckWithStats {
 }
 
 interface DeckCardProps extends DeckWithStats {
-  menuOpen: boolean;
-  onMenuToggle: () => void;
-  onMenuClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -29,110 +46,84 @@ interface DeckCardProps extends DeckWithStats {
 export function DeckCard({
   id,
   name,
+  description,
   subject,
   total_cards,
   due_count,
   learning_count,
   mastered_count,
   last_studied_label,
-  menuOpen,
-  onMenuToggle,
-  onMenuClose,
   onEdit,
   onDelete,
 }: DeckCardProps): React.JSX.Element {
   const mastery = total_cards > 0 ? Math.round((mastered_count / total_cards) * 100) : 0;
   const fullyMastered = mastery === 100 && total_cards > 0;
   const state = due_count > 0 ? 'study' : fullyMastered ? 'mastered' : 'review';
-  const categoryLabel = subject;
-  const categoryClass = 'bg-surface-container-low text-primary';
-  const stats = { due: due_count, learning: learning_count, mastered: mastered_count };
+  const accent = subjectAccent(subject);
+
+  const breakdown = [
+    { label: 'Due', value: due_count, dot: 'bg-error' },
+    { label: 'Learning', value: learning_count, dot: 'bg-secondary' },
+    { label: 'Mastered', value: mastered_count, dot: 'bg-tertiary' },
+  ];
 
   return (
-    <div className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-outline-variant/5 bg-surface-container-lowest p-6 transition-all hover:shadow-[0px_12px_32px_rgba(25,28,29,0.04)]">
+    <Surface
+      ghost
+      interactive
+      className="group relative flex flex-col justify-between overflow-hidden p-6"
+    >
       {state === 'mastered' && (
         <div className="pointer-events-none absolute -top-4 -right-4 h-24 w-24 rounded-full bg-tertiary/5 blur-2xl" />
       )}
 
       <div>
-        <div className="mb-4 flex items-start justify-between">
-          <span
-            className={`rounded-full px-3 py-1 text-[10px] font-bold tracking-widest uppercase ${categoryClass}`}
-          >
-            {categoryLabel}
-          </span>
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <Pill className={accent.pill}>{formatSubject(subject)}</Pill>
 
-          <div className="relative">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={onMenuToggle}
-              aria-label="Open deck actions"
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Deck actions" />}
             >
               <MoreHorizontal className="h-4 w-4" />
-            </Button>
-
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={onMenuClose} />
-                <div className="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-lg border border-outline-variant/10 bg-surface-container-lowest py-2 shadow-xl">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full justify-start rounded-none px-4 py-2 text-sm text-on-surface"
-                    onClick={() => {
-                      onMenuClose();
-                      onEdit();
-                    }}
-                  >
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit deck
-                  </Button>
-                  <Link
-                    href={`/decks/${id}`}
-                    onClick={onMenuClose}
-                    className={buttonVariants({
-                      variant: 'ghost',
-                      className: 'w-full justify-start rounded-none px-4 py-2 text-sm text-on-surface',
-                    })}
-                  >
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Add cards
-                  </Link>
-                  <hr className="my-1 border-outline-variant/10" />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full justify-start rounded-none px-4 py-2 text-sm text-destructive hover:bg-destructive/5 hover:text-destructive"
-                    onClick={() => {
-                      onMenuClose();
-                      onDelete();
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={onEdit}>
+                <Pencil className="h-4 w-4" />
+                Edit deck
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link href={`/decks/${id}`} />}>
+                <PlusCircle className="h-4 w-4" />
+                Add cards
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={onDelete}
+                className="text-destructive hover:bg-destructive/5 hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <Link href={`/decks/${id}`}>
-          <h3 className="mb-1 text-xl font-bold text-on-surface transition-colors group-hover:text-primary">
+          <h3 className="mb-1 text-headline-sm text-on-surface transition-colors group-hover:text-primary">
             {name}
           </h3>
         </Link>
 
-        <p className="mb-6 text-sm text-on-surface-variant">
+        {description && (
+          <p className="mb-3 line-clamp-2 text-body-sm text-on-surface-variant">{description}</p>
+        )}
+
+        <p className="mb-6 text-body-md text-on-surface-variant">
           {total_cards} cards ·{' '}
           {fullyMastered ? (
-            <span className="text-[10px] font-semibold tracking-tighter text-tertiary uppercase">
-              Fully Mastered
-            </span>
+            <span className="font-semibold text-tertiary">Fully mastered</span>
           ) : due_count > 0 ? (
-            <span className="font-semibold text-destructive">{due_count} due</span>
+            <span className="font-semibold text-error">{due_count} due</span>
           ) : (
             <span className="italic">0 due</span>
           )}
@@ -140,51 +131,33 @@ export function DeckCard({
 
         <div className="mb-8 space-y-4">
           <div>
-            <div className="mb-1 flex justify-between text-[10px] font-semibold tracking-wider text-on-surface-variant uppercase">
-              <span>Mastery Progress</span>
+            <div className="mb-1 flex justify-between text-label-sm text-on-surface-variant uppercase">
+              <span>Mastery progress</span>
               <span>{mastery}%</span>
             </div>
+            {/* 2px thread — DESIGN.md §5 */}
             <div className="h-0.5 w-full overflow-hidden rounded-full bg-surface-container-high">
               <div className="h-full bg-tertiary" style={{ width: `${mastery}%` }} />
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            {state === 'mastered' ? (
-              <div className="flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-full bg-tertiary" />
-                <span className="text-[10px] font-medium text-on-surface-variant">
-                  {stats.mastered}
+          {/* Labelled, not bare dots — the colours alone carried no meaning and
+              a tooltip would be unreachable on touch. */}
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {breakdown.map(({ label, value, dot }) => (
+              <li key={label} className="flex items-center gap-1.5">
+                <span aria-hidden className={cn('h-2 w-2 rounded-full', dot)} />
+                <span className="text-label-sm text-on-surface-variant uppercase">
+                  {label} {value}
                 </span>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-destructive" />
-                  <span className="text-[10px] font-medium text-on-surface-variant">
-                    {stats.due}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-secondary" />
-                  <span className="text-[10px] font-medium text-on-surface-variant">
-                    {stats.learning}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-tertiary" />
-                  <span className="text-[10px] font-medium text-on-surface-variant">
-                    {stats.mastered}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] italic text-on-surface-variant">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-body-sm text-on-surface-variant italic">
           Last studied {last_studied_label}
         </span>
 
@@ -196,14 +169,14 @@ export function DeckCard({
         >
           {state === 'study' ? 'Study now' : state === 'review' ? 'Review' : 'Refresh'}
           {state === 'study' ? (
-            <ArrowRight className="h-4 w-4 ml-1" />
+            <ArrowRight className="ml-1 h-4 w-4" />
           ) : state === 'review' ? (
-            <RefreshCw className="h-4 w-4 ml-1" />
+            <RefreshCw className="ml-1 h-4 w-4" />
           ) : (
-            <RotateCcw className="h-4 w-4 ml-1" />
+            <RotateCcw className="ml-1 h-4 w-4" />
           )}
         </Link>
       </div>
-    </div>
+    </Surface>
   );
 }

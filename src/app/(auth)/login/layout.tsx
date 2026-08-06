@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Iniciar Sesión',
+  title: 'Sign in — NeuroCards',
   description: 'Inicia sesión en tu cuenta de NeuroCards',
 };
 

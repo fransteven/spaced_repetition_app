@@ -34,6 +34,9 @@ export interface DeckDetailItem {
   user_id: string;
   total_cards: number;
   due_count: number;
+  learning_count: number;
+  mastered_count: number;
+  last_review: string | null;
 }
 
 interface DeckOwnershipRecord {
@@ -86,7 +89,14 @@ export async function listDecksForUser(userId: string): Promise<DeckListItem[]> 
       and(eq(cardSchedules.card_id, cards.id), eq(cardSchedules.user_id, userId))
     )
     .where(eq(decks.user_id, userId))
-    .groupBy(decks.id);
+    .groupBy(decks.id)
+    // Without an explicit order Postgres returns grouped rows in an arbitrary
+    // order, so the grid reshuffles between renders. Decks with due cards lead
+    // (false sorts before true), then alphabetical.
+    .orderBy(
+      sql`count(distinct case when ${cardSchedules.due_date} <= now() then ${cards.id} end) = 0`,
+      decks.name
+    );
 }
 
 export async function listDecksForUserPage(userId: string): Promise<DeckListPageItem[]> {
@@ -112,6 +122,11 @@ export async function getDeckDetailForUser(userId: string, deckId: string): Prom
       user_id: decks.user_id,
       total_cards: sql<number>`cast(count(distinct ${cards.id}) as int)`,
       due_count: sql<number>`cast(count(distinct case when ${cardSchedules.due_date} <= now() then ${cards.id} end) as int)`,
+      // Same aggregates as listDecksForUser — same joins, same groupBy, so the
+      // detail page gets mastery data without an extra query.
+      learning_count: sql<number>`cast(count(distinct case when ${cardSchedules.state} in ('new','learning','relearning') then ${cards.id} end) as int)`,
+      mastered_count: sql<number>`cast(count(distinct case when ${cardSchedules.state} = 'review' and ${cardSchedules.stability} >= 50 then ${cards.id} end) as int)`,
+      last_review: sql<string | null>`max(${cardSchedules.last_review})`,
     })
     .from(decks)
     .leftJoin(cards, eq(cards.deck_id, decks.id))

@@ -1,39 +1,111 @@
-import Link from 'next/link'
-import { Search, Settings } from "lucide-react"
-import { AppLogo } from '@/components/ui/app-logo'
+"use client"
+
+import Link from "next/link"
+import { useState } from "react"
+import { signOut, useSession } from "next-auth/react"
+import { LogOut, Menu, Settings } from "lucide-react"
+
+import { AppLogo } from "@/components/ui/app-logo"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { MobileDrawer } from "@/components/layout/mobile-drawer"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
+
+function initialsOf(name: string | null | undefined): string {
+  if (!name) return "?"
+  const parts = name.trim().split(/\s+/).slice(0, 2)
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?"
+}
 
 export function TopNav() {
-  return (
-    <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-[12px] flex justify-between items-center px-4 sm:px-8 py-4 shadow-sm border-b border-outline-variant/10">
-      <div className="flex items-center gap-8">
-        <AppLogo size="sm" href="/" />
-      </div>
+  const { data: session } = useSession()
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
-      <div className="flex items-center gap-4">
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant h-4 w-4" />
-          <input
-            type="text"
-            placeholder="Search..."
-            className="bg-surface-container-low border-none rounded-full pl-10 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 w-64 text-sm"
-          />
-        </div>
-        <div className="flex items-center gap-3 pl-4 border-l border-outline-variant/20">
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            className="text-on-surface-variant hover:text-primary transition-colors"
+  const name = session?.user?.name ?? null
+  const email = session?.user?.email ?? null
+
+  return (
+    <>
+      {/* The blur is the separation — no border. DESIGN.md §6 */}
+      <nav className="fixed top-0 z-50 flex w-full items-center justify-between bg-background/80 px-4 py-4 backdrop-blur-[12px] sm:px-8">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Open navigation"
+            className="lg:hidden"
+            onClick={() => setDrawerOpen(true)}
           >
-            <Settings className="h-5 w-5" />
-          </Link>
-          <span className="hidden sm:inline-block text-sm font-medium text-on-surface">
-            Alex Rivera
-          </span>
-          <div className="w-10 h-10 rounded-full bg-surface-container-high ring-2 ring-primary/10 flex items-center justify-center">
-            <span className="text-xs font-bold text-on-surface-variant select-none">AR</span>
-          </div>
+            <Menu className="h-5 w-5" />
+          </Button>
+          <AppLogo size="sm" href="/" />
         </div>
-      </div>
-    </nav>
+
+        <div className="flex items-center gap-3">
+          <ThemeToggle className="hidden sm:flex" />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Account menu"
+                  className="flex cursor-pointer items-center gap-3 rounded-full transition-opacity hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                />
+              }
+            >
+              <span className="hidden text-sm font-medium text-on-surface sm:inline-block">
+                {name ?? "Account"}
+              </span>
+              <Avatar className="size-9 ring-2 ring-primary/10">
+                {session?.user?.image ? (
+                  <AvatarImage src={session.user.image} alt="" />
+                ) : null}
+                <AvatarFallback className="bg-surface-container-high text-xs font-bold text-on-surface-variant">
+                  {initialsOf(name ?? email)}
+                </AvatarFallback>
+              </Avatar>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end" className="w-56">
+              {(name || email) && (
+                <DropdownMenuLabel className="flex flex-col gap-0.5">
+                  {name && <span className="text-sm font-medium text-on-surface">{name}</span>}
+                  {email && (
+                    <span className="text-body-sm font-normal text-on-surface-variant">
+                      {email}
+                    </span>
+                  )}
+                </DropdownMenuLabel>
+              )}
+
+              <DropdownMenuItem render={<Link href="/settings" />}>
+                <Settings className="h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+
+              <div className="flex items-center justify-between px-2 py-1.5 sm:hidden">
+                <span className="text-sm text-on-surface-variant">Theme</span>
+                <ThemeToggle />
+              </div>
+
+              <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </nav>
+
+      <MobileDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+    </>
   )
 }

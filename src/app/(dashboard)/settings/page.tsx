@@ -6,7 +6,7 @@ import { SkillsManager } from "@/components/settings/skills-manager"
 
 export const metadata: Metadata = {
   title: "Configuración",
-  description: "Administra tus habilidades y configuración de NeuroCards",
+  description: "Manage your skills and NeuroCards settings",
 }
 
 export default async function SettingsPage(): Promise<React.JSX.Element> {
@@ -20,7 +20,7 @@ export default async function SettingsPage(): Promise<React.JSX.Element> {
       <div>
         <h1 className="text-3xl font-bold text-primary tracking-tight">Settings</h1>
         <p className="text-on-surface-variant text-sm mt-1">
-          Manage the skills the AI examiner draws on during &ldquo;Examíname con IA&rdquo; sessions.
+          Manage the skills the AI examiner draws on during &ldquo;Quiz me with AI&rdquo; sessions.
         </p>
       </div>
 
