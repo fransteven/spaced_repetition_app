@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useState } from "react"
 import { signOut, useSession } from "next-auth/react"
-import { LogOut, Menu, Settings } from "lucide-react"
+import { LogOut, Menu, Search, Settings } from "lucide-react"
 
 import { AppLogo } from "@/components/ui/app-logo"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MobileDrawer } from "@/components/layout/mobile-drawer"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
+import { CommandPalette, type PaletteDeck } from "@/components/search/command-palette"
+import { useCommandPaletteHotkey } from "@/hooks/use-command-palette-hotkey"
 
 function initialsOf(name: string | null | undefined): string {
   if (!name) return "?"
@@ -24,9 +26,16 @@ function initialsOf(name: string | null | undefined): string {
   return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?"
 }
 
-export function TopNav() {
+export interface TopNavProps {
+  decks?: PaletteDeck[]
+}
+
+export function TopNav({ decks = [] }: TopNavProps): React.JSX.Element {
   const { data: session } = useSession()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+
+  useCommandPaletteHotkey({ open: paletteOpen, onOpenChange: setPaletteOpen })
 
   const name = session?.user?.name ?? null
   const email = session?.user?.email ?? null
@@ -48,7 +57,33 @@ export function TopNav() {
           <AppLogo size="sm" href="/" />
         </div>
 
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => setPaletteOpen(true)}
+          className="hidden sm:flex h-9 w-48 md:w-64 items-center justify-between rounded-lg bg-surface-container-low px-3 text-body-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface cursor-pointer"
+          aria-label="Open quick search"
+        >
+          <span className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-outline" />
+            <span className="hidden md:inline">Search…</span>
+          </span>
+          <kbd className="hidden md:inline-flex items-center rounded bg-surface-container-high px-1.5 text-label-sm text-on-surface-variant">
+            ⌘K
+          </kbd>
+        </Button>
+
         <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setPaletteOpen(true)}
+            className="sm:hidden text-on-surface-variant"
+            aria-label="Open quick search"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
           <ThemeToggle className="hidden sm:flex" />
 
           <DropdownMenu>
@@ -106,6 +141,7 @@ export function TopNav() {
       </nav>
 
       <MobileDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <CommandPalette decks={decks} open={paletteOpen} onOpenChange={setPaletteOpen} />
     </>
   )
 }

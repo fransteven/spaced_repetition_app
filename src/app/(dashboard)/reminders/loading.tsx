@@ -8,7 +8,10 @@ export default function RemindersLoading() {
             <div className="h-12 w-64 bg-surface-container-high rounded animate-pulse" />
             <div className="h-5 w-full bg-surface-container-low rounded animate-pulse" />
           </div>
-          <div className="h-11 w-32 bg-surface-container-high rounded-lg animate-pulse" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="h-9 w-full sm:w-56 bg-surface-container-low rounded-lg animate-pulse" />
+            <div className="h-11 w-32 bg-surface-container-high rounded-lg animate-pulse" />
+          </div>
         </div>
       </header>
 

@@ -2,11 +2,13 @@ import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Play } from 'lucide-react';
 
 import { CardList } from '@/components/cards/CardList';
 import { Pill } from '@/components/primitives/pill';
 import { PageHeader, PageSection } from '@/components/layout/page-header';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { formatSubject, subjectAccent } from '@/lib/subject-accent';
 import { listCardsForDeck } from '@/lib/services/card-service';
 import { getDeckDetailForUser } from '@/lib/services/deck-service';
@@ -77,25 +79,58 @@ export default async function DeckDetailPage({ params }: Props): Promise<React.J
             )}
           </div>
 
-          <div className="w-full max-w-xs space-y-2">
-            <div className="flex justify-between text-label-sm text-on-surface-variant uppercase">
-              <span>Mastery progress</span>
-              <span>{mastery}%</span>
+          <div className="flex w-full flex-col gap-4 md:w-auto md:min-w-[280px] md:max-w-xs">
+            <div className="space-y-2">
+              <div className="flex justify-between text-label-sm text-on-surface-variant uppercase">
+                <span>Mastery progress</span>
+                <span>{mastery}%</span>
+              </div>
+              <div className="h-0.5 w-full overflow-hidden rounded-full bg-surface-container-high">
+                <div className="h-full bg-tertiary" style={{ width: `${mastery}%` }} />
+              </div>
+              <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
+                <li className="text-label-sm text-on-surface-variant uppercase">
+                  {deck.total_cards} cards
+                </li>
+                <li className="text-label-sm text-on-surface-variant uppercase">
+                  {deck.due_count} due
+                </li>
+                <li className="text-label-sm text-on-surface-variant uppercase">
+                  {deck.mastered_count} mastered
+                </li>
+              </ul>
             </div>
-            <div className="h-0.5 w-full overflow-hidden rounded-full bg-surface-container-high">
-              <div className="h-full bg-tertiary" style={{ width: `${mastery}%` }} />
-            </div>
-            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
-              <li className="text-label-sm text-on-surface-variant uppercase">
-                {deck.total_cards} cards
-              </li>
-              <li className="text-label-sm text-on-surface-variant uppercase">
-                {deck.due_count} due
-              </li>
-              <li className="text-label-sm text-on-surface-variant uppercase">
-                {deck.mastered_count} mastered
-              </li>
-            </ul>
+
+            {deck.total_cards > 0 ? (
+              <Link
+                href={`/study/${id}`}
+                className={cn(
+                  buttonVariants({
+                    variant: deck.due_count > 0 ? 'default' : 'secondary',
+                    size: 'lg',
+                  }),
+                  'w-full gap-2 font-semibold'
+                )}
+              >
+                <Play className="h-4 w-4 fill-current" />
+                Study now
+                {deck.due_count > 0 && (
+                  <span className="ml-auto rounded-full bg-primary-foreground/20 px-2 py-0.5 text-label-sm font-bold">
+                    {deck.due_count}
+                  </span>
+                )}
+              </Link>
+            ) : (
+              <Button
+                disabled
+                variant="outline"
+                size="lg"
+                className="w-full gap-2 opacity-50 cursor-not-allowed"
+              >
+                <Play className="h-4 w-4" />
+                Study now
+              </Button>
+            )}
           </div>
         </div>
       </PageHeader>

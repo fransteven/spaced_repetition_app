@@ -134,7 +134,7 @@ async function getTimeline(userId: string, now: Date): Promise<TimelineItem[]> {
     .orderBy(cardSchedules.due_date);
 
   // Group by deck_id + bucket key
-  const groups = new Map<string, { deck: string; count: number; earliest: Date; bucket: ReturnType<typeof stabilityBucket> }>();
+  const groups = new Map<string, { id: string; deck: string; count: number; earliest: Date; bucket: ReturnType<typeof stabilityBucket> }>();
 
   for (const r of rows) {
     const bucket = stabilityBucket(r.stability);
@@ -143,7 +143,7 @@ async function getTimeline(userId: string, now: Date): Promise<TimelineItem[]> {
     if (existing) {
       existing.count++;
     } else {
-      groups.set(key, { deck: r.deck_name, count: 1, earliest: r.due_date, bucket });
+      groups.set(key, { id: key, deck: r.deck_name, count: 1, earliest: r.due_date, bucket });
     }
   }
 
@@ -151,6 +151,7 @@ async function getTimeline(userId: string, now: Date): Promise<TimelineItem[]> {
   const sorted = [...groups.values()].sort((a, b) => a.earliest.getTime() - b.earliest.getTime());
 
   return sorted.slice(0, 5).map(g => ({
+    id:         g.id,
     label:      relativeLabel(g.earliest, now),
     deck:       g.deck,
     cards:      g.count,

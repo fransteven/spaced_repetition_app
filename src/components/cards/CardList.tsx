@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 
@@ -10,6 +10,9 @@ import { DeleteCardDialog } from '@/components/cards/DeleteCardDialog';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/primitives/pill';
 import { Surface } from '@/components/primitives/surface';
+import { SearchField } from '@/components/primitives/search-field';
+import { NoResults } from '@/components/primitives/no-results';
+import { useListSearch } from '@/hooks/use-list-search';
 import type { CardData } from '@/lib/validations';
 
 interface CardRow extends CardData {
@@ -34,6 +37,8 @@ const STATE_TONE: Record<string, React.ComponentProps<typeof Pill>['tone']> = {
   review: 'tertiary',
 };
 
+const STATE_FILTERS: string[] = ['All', 'new', 'learning', 'relearning', 'review'];
+
 function scheduleLabel(card: CardRow): string | null {
   const parts: string[] = [];
 
@@ -54,9 +59,36 @@ function scheduleLabel(card: CardRow): string | null {
 }
 
 export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Element {
+  const [activeState, setActiveState] = useState<string>('All');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editCard, setEditCard] = useState<CardData | null>(null);
   const [deleteCard, setDeleteCard] = useState<{ id: string; front: string } | null>(null);
+
+  const getCardHaystack = useCallback(
+    (card: CardRow): Array<string | null | undefined> => [
+      card.front,
+      card.back,
+      card.tags?.join(' '),
+    ],
+    []
+  );
+
+  const {
+    query,
+    setQuery,
+    results: searchedCards,
+    isSearching,
+    clear,
+  } = useListSearch(initialCards, getCardHaystack);
+
+  const filteredCards = useMemo(() => {
+    if (activeState === 'All') return searchedCards;
+    return searchedCards.filter(
+      (card) => card.state?.toLowerCase() === activeState.toLowerCase()
+    );
+  }, [searchedCards, activeState]);
+
+  const hasFilters = isSearching || activeState !== 'All';
 
   const openCreate = () => {
     setEditCard(null);
@@ -75,21 +107,17 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
     setEditorOpen(true);
   };
 
-  return (
-    <>
-      <div className="mb-6 flex items-center justify-between">
-        <p className="text-body-md text-on-surface-variant">
-          {initialCards.length === 0
-            ? 'No cards yet'
-            : `${initialCards.length} card${initialCards.length !== 1 ? 's' : ''}`}
-        </p>
-        <Button type="button" onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add card
-        </Button>
-      </div>
+  if (initialCards.length === 0) {
+    return (
+      <>
+        <div className="mb-6 flex items-center justify-between">
+          <p className="text-body-md text-on-surface-variant">No cards yet</p>
+          <Button type="button" onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add card
+          </Button>
+        </div>
 
-      {initialCards.length === 0 ? (
         <Surface tone="panel" className="flex flex-col items-center justify-center px-6 py-24 text-center">
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-surface-container-highest">
             <Layers className="h-9 w-9 text-primary" />
@@ -103,9 +131,72 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
             Add your first card
           </Button>
         </Surface>
+
+        <CardEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          deckId={deckId}
+          initialValues={editCard ?? undefined}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <p className="text-body-md text-on-surface-variant">
+            {hasFilters
+              ? `${filteredCards.length} of ${initialCards.length} cards`
+              : `${initialCards.length} card${initialCards.length !== 1 ? 's' : ''}`}
+          </p>
+          <Button type="button" onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add card
+          </Button>
+        </div>
+
+        <div className="flex flex-col flex-wrap items-center gap-3 rounded-xl bg-surface-container-low p-2 sm:flex-row">
+          <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
+            {STATE_FILTERS.map((filter) => (
+              <Button
+                key={filter}
+                type="button"
+                variant={activeState === filter ? 'default' : 'ghost'}
+                onClick={() => setActiveState(filter)}
+                className="capitalize px-3 py-1.5 text-xs sm:px-4 sm:text-sm"
+              >
+                {filter}
+              </Button>
+            ))}
+          </div>
+
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Filter cards by text or tag…"
+            className="sm:ml-auto sm:w-64"
+          />
+        </div>
+      </div>
+
+      {filteredCards.length === 0 ? (
+        <NoResults
+          query={query}
+          message={
+            !query && activeState !== 'All'
+              ? `No cards in “${activeState}” state. Try selecting a different state or clear filters.`
+              : undefined
+          }
+          onClear={() => {
+            setActiveState('All');
+            clear();
+          }}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {initialCards.map((card) => {
+          {filteredCards.map((card) => {
             const schedule = scheduleLabel(card);
             return (
               <Surface

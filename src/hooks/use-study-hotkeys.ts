@@ -4,15 +4,7 @@ import { useEffect } from "react"
 
 import type { FsrsRating } from "@/lib/fsrs/types"
 import { RATING_BY_HOTKEY } from "@/components/study/ratings"
-
-const TEXT_ENTRY = new Set(["INPUT", "TEXTAREA", "SELECT"])
-
-function isTextEntry(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (TEXT_ENTRY.has(target.tagName)) return true
-  if (target.isContentEditable) return true
-  return target.getAttribute("role") === "textbox"
-}
+import { isTextEntry } from "@/lib/is-text-entry"
 
 interface Options {
   revealed: boolean

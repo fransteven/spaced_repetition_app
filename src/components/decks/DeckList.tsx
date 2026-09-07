@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Plus } from 'lucide-react';
 
 import { formatSubject } from '@/lib/subject-accent';
 import { DeckCard, type DeckWithStats } from '@/components/decks/DeckCard';
@@ -10,8 +10,10 @@ import { CreateDeckDialog } from '@/components/decks/CreateDeckDialog';
 import { EditDeckDialog } from '@/components/decks/EditDeckDialog';
 import { DeleteDeckDialog } from '@/components/decks/DeleteDeckDialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SearchField } from '@/components/primitives/search-field';
+import { NoResults } from '@/components/primitives/no-results';
 import { PageSection } from '@/components/layout/page-header';
+import { useListSearch } from '@/hooks/use-list-search';
 
 interface DeckListProps {
   decks: DeckWithStats[];
@@ -19,27 +21,35 @@ interface DeckListProps {
 
 export function DeckList({ decks }: DeckListProps): React.JSX.Element {
   const [activeFilter, setActiveFilter] = useState<string>('All');
-  const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editDeck, setEditDeck] = useState<DeckWithStats | null>(null);
   const [deleteDeck, setDeleteDeck] = useState<DeckWithStats | null>(null);
 
+  const getDeckHaystack = useCallback(
+    (deck: DeckWithStats): Array<string | null | undefined> => [
+      deck.name,
+      deck.subject,
+      deck.description,
+    ],
+    []
+  );
+
+  const {
+    query,
+    setQuery,
+    results: searchedDecks,
+    clear,
+  } = useListSearch(decks, getDeckHaystack);
+
   const uniqueSubjects = Array.from(new Set(decks.map((deck) => formatSubject(deck.subject)))).sort();
   const dynamicFilters = ['All', ...uniqueSubjects];
 
-  const query = search.trim().toLowerCase();
-  const filtered = decks.filter((deck) => {
-    const matchFilter =
-      activeFilter === 'All' || deck.subject.toLowerCase() === activeFilter.toLowerCase();
-    const matchSearch =
-      !query ||
-      deck.name.toLowerCase().includes(query) ||
-      deck.subject.toLowerCase().includes(query) ||
-      (deck.description?.toLowerCase().includes(query) ?? false);
-    return matchFilter && matchSearch;
-  });
-
-  const hasFilters = activeFilter !== 'All' || query.length > 0;
+  const filtered = useMemo(() => {
+    if (activeFilter === 'All') return searchedDecks;
+    return searchedDecks.filter(
+      (deck) => deck.subject.toLowerCase() === activeFilter.toLowerCase()
+    );
+  }, [searchedDecks, activeFilter]);
 
   const dialogs = (
     <>
@@ -96,16 +106,12 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
           ))}
         </div>
 
-        <div className="flex w-full items-center rounded-lg bg-card transition-all focus-within:ring-2 focus-within:ring-primary/20 sm:ml-auto sm:w-48 md:w-64">
-          <Search className="ml-3 h-4 w-4 text-outline" />
-          <Input
-            type="text"
-            placeholder="Filter decks…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 w-full border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
-          />
-        </div>
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Filter decks…"
+          className="sm:ml-auto sm:w-48 md:w-64"
+        />
 
         <Button
           type="button"
@@ -118,26 +124,18 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
       </PageSection>
 
       {filtered.length === 0 ? (
-        <PageSection className="flex flex-col items-center gap-4 py-24 text-center">
-          <p className="text-headline-md text-on-surface">
-            {query ? `No decks match “${search.trim()}”` : 'No decks in this subject'}
-          </p>
-          <p className="text-body-md text-on-surface-variant">
-            Try a different subject, or clear the filters to see everything.
-          </p>
-          {hasFilters && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setActiveFilter('All');
-                setSearch('');
-              }}
-            >
-              Clear filters
-            </Button>
-          )}
-        </PageSection>
+        <NoResults
+          query={query}
+          message={
+            !query && activeFilter !== 'All'
+              ? 'Try a different subject, or clear the filters to see everything.'
+              : undefined
+          }
+          onClear={() => {
+            setActiveFilter('All');
+            clear();
+          }}
+        />
       ) : (
         <PageSection className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((deck) => (

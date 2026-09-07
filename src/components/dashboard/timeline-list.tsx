@@ -1,6 +1,7 @@
 import React from "react"
 
 export interface TimelineItem {
+  id?: string
   label: string
   deck: string
   cards: number
@@ -14,7 +15,7 @@ export function TimelineList({ timeline }: { timeline: TimelineItem[] }) {
     <div className="flex flex-col gap-0 border-l border-outline-variant/30 ml-3">
       {timeline.map((item, i) => (
         <div
-          key={item.label}
+          key={item.id ?? `${item.label}-${item.deck}-${item.meta}-${i}`}
           className={`relative pl-8 ${i < timeline.length - 1 ? "pb-8" : ""}`}
         >
           <div
