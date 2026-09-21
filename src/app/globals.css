@@ -9,20 +9,21 @@
   --font-sans: var(--font-inter);
   --font-mono: ui-monospace, monospace;
   --font-heading: var(--font-inter);
+  --font-display: var(--font-fraunces);
 
-  /* Type scale — DESIGN.md §3. Display carries -0.02em per spec. */
+  /* Type scale — DESIGN.md §3. Display carries -0.01em and weight 600. */
   --text-display-lg: 3.5rem;
   --text-display-lg--line-height: 1.02;
-  --text-display-lg--letter-spacing: -0.02em;
-  --text-display-lg--font-weight: 800;
+  --text-display-lg--letter-spacing: -0.01em;
+  --text-display-lg--font-weight: 600;
   --text-display-md: 2.75rem;
   --text-display-md--line-height: 1.06;
-  --text-display-md--letter-spacing: -0.02em;
-  --text-display-md--font-weight: 800;
+  --text-display-md--letter-spacing: -0.01em;
+  --text-display-md--font-weight: 600;
   --text-display-sm: 2.25rem;
   --text-display-sm--line-height: 1.1;
-  --text-display-sm--letter-spacing: -0.02em;
-  --text-display-sm--font-weight: 800;
+  --text-display-sm--letter-spacing: -0.01em;
+  --text-display-sm--font-weight: 600;
 
   --text-headline-lg: 2rem;
   --text-headline-lg--line-height: 1.15;
@@ -55,6 +56,34 @@
   --text-label-sm--line-height: 1.3;
   --text-label-sm--letter-spacing: 0.08em;
   --text-label-sm--font-weight: 600;
+
+  /* Metric scale — tabular-nums for non-jumping counters */
+  --text-metric-lg: 3rem;
+  --text-metric-lg--line-height: 1;
+  --text-metric-lg--letter-spacing: -0.03em;
+  --text-metric-lg--font-weight: 700;
+  --text-metric-md: 2rem;
+  --text-metric-md--line-height: 1.05;
+  --text-metric-md--letter-spacing: -0.02em;
+  --text-metric-md--font-weight: 700;
+  --text-metric-sm: 1.25rem;
+  --text-metric-sm--line-height: 1.1;
+  --text-metric-sm--letter-spacing: -0.01em;
+  --text-metric-sm--font-weight: 700;
+
+  /* Motion tokens */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-pop-in:     pop-in 250ms var(--ease-soft) both;
+  --animate-rise-in:    rise-in 400ms var(--ease-soft) both;
+  --animate-streak:     streak-pulse 2.4s ease-in-out infinite;
+  --animate-thread:     thread-grow 600ms var(--ease-soft) both;
+  --animate-celebrate:  celebrate 700ms var(--ease-soft) both;
+
+  @keyframes pop-in      { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+  @keyframes rise-in     { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes streak-pulse{ 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .85; transform: scale(1.06); } }
+  @keyframes thread-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes celebrate   { 0% { opacity: 0; transform: scale(.8); } 60% { transform: scale(1.06); } 100% { opacity: 1; transform: none; } }
 
   /* Ambient shadow — DESIGN.md §4. Tinted from on-surface, never pure black. */
   --shadow-ambient: 0px 12px 32px var(--shadow-tint);
@@ -151,6 +180,25 @@
   --color-outline: var(--outline);
   --color-outline-variant: var(--outline-variant);
 
+  /* Learning states — buckets FSRS */
+  --color-state-new: var(--state-new);
+  --color-state-new-container: var(--state-new-container);
+  --color-on-state-new-container: var(--on-state-new-container);
+  --color-state-struggling: var(--state-struggling);
+  --color-state-struggling-container: var(--state-struggling-container);
+  --color-on-state-struggling-container: var(--on-state-struggling-container);
+  --color-state-intermediate: var(--state-intermediate);
+  --color-state-intermediate-container: var(--state-intermediate-container);
+  --color-on-state-intermediate-container: var(--on-state-intermediate-container);
+  --color-state-mastered: var(--state-mastered);
+  --color-state-mastered-container: var(--state-mastered-container);
+  --color-on-state-mastered-container: var(--on-state-mastered-container);
+
+  /* Streak — temporal reinforcement */
+  --color-streak: var(--streak);
+  --color-streak-container: var(--streak-container);
+  --color-on-streak-container: var(--on-streak-container);
+
   /* Border radius */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -162,7 +210,7 @@
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 
   /* Shadow tint — consumed by --shadow-ambient{,-lg} */
   --shadow-tint: rgba(25, 28, 29, 0.04);
@@ -188,12 +236,31 @@
   --input: #c7c4d8;
   --ring: #3525cd;
 
+  /* Learning states — buckets FSRS (AGENTS.md §7.1) */
+  --state-new:                        #4338ca;
+  --state-new-container:              #e4e1ff;
+  --on-state-new-container:           #1c0e8f;
+  --state-struggling:                 #b3261e;
+  --state-struggling-container:       #ffdad6;
+  --on-state-struggling-container:    #6d0a05;
+  --state-intermediate:               #8a5a00;
+  --state-intermediate-container:     #ffeaca;
+  --on-state-intermediate-container:  #4a2f00;
+  --state-mastered:                   #006b46;
+  --state-mastered-container:         #c4f2df;
+  --on-state-mastered-container:      #00321f;
+
+  /* Streak — refuerzo temporal. Solo en contexto de racha, nunca como bucket */
+  --streak:                           #c2410c;
+  --streak-container:                 #ffe4d3;
+  --on-streak-container:              #5c1c02;
+
   /* Charts */
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-1: var(--state-new);
+  --chart-2: var(--state-intermediate);
+  --chart-3: var(--state-mastered);
+  --chart-4: var(--state-struggling);
+  --chart-5: var(--streak);
 
   /* Sidebar */
   --sidebar: #f8f9fa;
@@ -339,6 +406,30 @@
   --on-secondary: #140f54;
   --secondary-container: #413f82;
   --on-secondary-container: #e2dfff;
+
+  /* Learning states — dark */
+  --state-new:                        #bdb8ff;
+  --state-new-container:              #2b2296;
+  --on-state-new-container:           #e4e1ff;
+  --state-struggling:                 #ffb4ab;
+  --state-struggling-container:       #5c1410;
+  --on-state-struggling-container:    #ffdad6;
+  --state-intermediate:               #f2c46b;
+  --state-intermediate-container:     #4a3100;
+  --on-state-intermediate-container:  #ffeaca;
+  --state-mastered:                   #57e0a8;
+  --state-mastered-container:         #00432b;
+  --on-state-mastered-container:      #c4f2df;
+  --streak:                           #ff9a62;
+  --streak-container:                 #4d1a04;
+  --on-streak-container:              #ffe4d3;
+
+  /* Charts */
+  --chart-1: var(--state-new);
+  --chart-2: var(--state-intermediate);
+  --chart-3: var(--state-mastered);
+  --chart-4: var(--state-struggling);
+  --chart-5: var(--streak);
 }
 
 @layer base {
@@ -350,6 +441,9 @@
   }
   html {
     @apply font-sans;
+  }
+  .text-display-lg, .text-display-md, .text-display-sm {
+    font-family: var(--font-display);
   }
 
   /* The study card's disclosure animates height; honour the OS preference. */
@@ -366,6 +460,9 @@
 }
 
 @layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }

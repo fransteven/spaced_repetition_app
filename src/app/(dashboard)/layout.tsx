@@ -29,5 +29,11 @@ export default async function DashboardLayout({
     description: d.description,
   }));
 
-  return <DashboardShell decks={decks}>{children}</DashboardShell>;
+  const hasDueCards = userDecks.some((d) => d.due_count > 0);
+
+  return (
+    <DashboardShell decks={decks} hasDueCards={hasDueCards}>
+      {children}
+    </DashboardShell>
+  );
 }

@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 
 export const metadata: Metadata = {
-  title: 'Autenticación',
-  description: 'Inicia sesión o crea una cuenta en NeuroCards.',
+  title: 'Authentication — NeuroCards',
+  description: 'Sign in or create an account on NeuroCards.',
 };
 
 export default async function AuthLayout({

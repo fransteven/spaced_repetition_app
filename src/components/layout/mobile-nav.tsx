@@ -16,7 +16,7 @@ const TABS = [
   { icon: Settings, label: "Settings", href: "/settings" },
 ] as const
 
-export function MobileNav() {
+export function MobileNav({ hasDueCards = false }: { hasDueCards?: boolean }) {
   const pathname = usePathname()
   const [createOpen, setCreateOpen] = useState(false)
 
@@ -30,22 +30,35 @@ export function MobileNav() {
     icon: typeof LayoutDashboard
     label: string
     href: string
-  }) => (
-    <Link
-      key={href}
-      href={href}
-      aria-current={isNavActive(pathname, href) ? "page" : undefined}
-      className={cn(
-        "flex flex-col items-center gap-1 transition-colors",
-        isNavActive(pathname, href)
-          ? "font-semibold text-primary"
-          : "font-medium text-on-surface-variant hover:text-primary"
-      )}
-    >
-      <Icon className="h-6 w-6" />
-      <span className="text-label-sm normal-case">{label}</span>
-    </Link>
-  )
+  }) => {
+    const active = isNavActive(pathname, href)
+    const isDueTab = href === "/" && hasDueCards
+
+    return (
+      <Link
+        key={href}
+        href={href}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "relative flex flex-col items-center gap-1 transition-colors",
+          active
+            ? "font-semibold text-primary"
+            : "font-medium text-on-surface-variant hover:text-primary"
+        )}
+      >
+        <div className="relative">
+          <Icon className="h-6 w-6" />
+          {isDueTab && (
+            <span
+              className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-state-struggling"
+              aria-label="Cards due for review"
+            />
+          )}
+        </div>
+        <span className="text-label-sm normal-case">{label}</span>
+      </Link>
+    )
+  }
 
   return (
     <>

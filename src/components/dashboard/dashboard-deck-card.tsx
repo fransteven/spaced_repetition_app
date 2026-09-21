@@ -1,6 +1,11 @@
 import React from "react"
 import Link from "next/link"
 import { type LucideIcon } from "lucide-react"
+import { Surface } from "@/components/primitives/surface"
+import { Pill } from "@/components/primitives/pill"
+import { MasteryThread } from "@/components/primitives/mastery-thread"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 export interface DashboardDeck {
   deckId: string
@@ -24,51 +29,44 @@ export function DashboardDeckCard({
   iconColor,
 }: DashboardDeck) {
   const hasDue = due > 0
+
   return (
-    <div className="min-w-[320px] sm:min-w-[360px] bg-surface-container-lowest p-6 rounded-xl ring-1 ring-outline-variant/10 hover:shadow-[0px_12px_32px_rgba(25,28,29,0.04)] transition-all duration-300">
-      <div className="flex justify-between items-start mb-6">
-        <div className={`w-12 h-12 ${iconBg} rounded-lg flex items-center justify-center ${iconColor}`}>
-          <Icon className="h-6 w-6" />
+    <Surface
+      tone="card"
+      interactive
+      className="min-w-[280px] sm:min-w-[320px] p-5 sm:p-6 flex flex-col justify-between"
+    >
+      <div>
+        <div className="flex justify-between items-start mb-5">
+          <div className={`size-11 ${iconBg} rounded-xl flex items-center justify-center ${iconColor}`}>
+            <Icon className="size-5" />
+          </div>
+          <Pill tone={hasDue ? "struggling" : "neutral"} size="sm">
+            {hasDue ? `${due} due` : "0 due"}
+          </Pill>
         </div>
-        {hasDue ? (
-          <span className="bg-error/10 text-error px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-            {due} due
-          </span>
-        ) : (
-          <span className="bg-surface-container-high text-on-surface-variant px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-            0 due
-          </span>
+
+        <h3 className="text-headline-sm text-on-surface mb-1 line-clamp-1">{title}</h3>
+        <p className="text-body-sm text-on-surface-variant capitalize mb-6">{category}</p>
+
+        <div className="mb-6">
+          <div className="flex justify-between text-label-sm font-semibold text-on-surface-variant mb-2">
+            <span>Mastery</span>
+            <span className="tabular">{mastery}%</span>
+          </div>
+          <MasteryThread value={mastery} />
+        </div>
+      </div>
+
+      <Link
+        href={`/study/${deckId}`}
+        className={cn(
+          buttonVariants({ variant: hasDue ? "default" : "outline", size: "lg" }),
+          "w-full"
         )}
-      </div>
-
-      <h3 className="text-xl font-bold text-on-surface mb-1">{title}</h3>
-      <p className="text-sm text-on-surface-variant mb-6">{category}</p>
-
-      <div className="mb-8">
-        <div className="flex justify-between text-xs font-bold text-on-surface-variant mb-2">
-          <span>Mastery</span>
-          <span>{mastery}%</span>
-        </div>
-        <div className="w-full h-[2px] bg-surface-container-high rounded-full overflow-hidden">
-          <div className="h-full bg-tertiary" style={{ width: `${mastery}%` }} />
-        </div>
-      </div>
-
-      {hasDue ? (
-        <Link
-          href={`/study/${deckId}`}
-          className="block w-full bg-primary text-on-primary py-3 rounded-lg font-bold text-sm text-center hover:bg-primary-container transition-colors shadow-sm"
-        >
-          Study now
-        </Link>
-      ) : (
-        <Link
-          href={`/study/${deckId}`}
-          className="block w-full border border-primary text-primary py-3 rounded-lg font-bold text-sm text-center hover:bg-primary/5 transition-colors"
-        >
-          Study now
-        </Link>
-      )}
-    </div>
+      >
+        Study now
+      </Link>
+    </Surface>
   )
 }

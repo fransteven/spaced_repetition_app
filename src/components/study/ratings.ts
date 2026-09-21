@@ -6,24 +6,48 @@ export interface RatingSpec {
   hotkey: string
   /** Solid token for the session-count dot. */
   dot: string
-  /** Button variant — the dot and the button must never disagree again. */
-  variant: "destructive" | "outline" | "default" | "tertiary"
+  /** Tonal classes for an equal-weight 4-way choice — DESIGN.md §2 & §5. */
+  buttonClass: string
 }
 
 /**
  * Single source of truth for the four FSRS ratings.
- *
- * This used to live in `question-view.tsx` with separate `active`/`idle` class
- * strings that had drifted apart: Hard's dot was `bg-secondary` while its
- * button was an outline, and Good's dot was `bg-primary` while its button was
- * `bg-primary-container`.
+ * Equal visual weight via tonal containers, distinct in color.
  */
 export const RATINGS: readonly RatingSpec[] = [
-  { key: "again", label: "Again", hotkey: "1", dot: "bg-destructive", variant: "destructive" },
-  { key: "hard", label: "Hard", hotkey: "2", dot: "bg-outline", variant: "outline" },
-  { key: "good", label: "Good", hotkey: "3", dot: "bg-primary", variant: "default" },
-  { key: "easy", label: "Easy", hotkey: "4", dot: "bg-tertiary", variant: "tertiary" },
-] as const
+  {
+    key: "again",
+    label: "Again",
+    hotkey: "1",
+    dot: "bg-state-struggling",
+    buttonClass:
+      "bg-state-struggling-container text-on-state-struggling-container hover:bg-state-struggling-container/80",
+  },
+  {
+    key: "hard",
+    label: "Hard",
+    hotkey: "2",
+    dot: "bg-state-intermediate",
+    buttonClass:
+      "bg-state-intermediate-container text-on-state-intermediate-container hover:bg-state-intermediate-container/80",
+  },
+  {
+    key: "good",
+    label: "Good",
+    hotkey: "3",
+    dot: "bg-state-new",
+    buttonClass:
+      "bg-state-new-container text-on-state-new-container hover:bg-state-new-container/80",
+  },
+  {
+    key: "easy",
+    label: "Easy",
+    hotkey: "4",
+    dot: "bg-state-mastered",
+    buttonClass:
+      "bg-state-mastered-container text-on-state-mastered-container hover:bg-state-mastered-container/80",
+  },
+]
 
 export const RATING_BY_HOTKEY: Record<string, FsrsRating> = Object.fromEntries(
   RATINGS.map((r) => [r.hotkey, r.key])

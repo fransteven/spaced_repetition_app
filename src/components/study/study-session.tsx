@@ -20,9 +20,17 @@ interface Props {
   deckId: string
   deckName: string
   initialCards: StudyCardItem[]
+  streakDays: number
+  reviewedTodayBeforeSession: boolean
 }
 
-export function StudySession({ deckId, deckName, initialCards }: Props) {
+export function StudySession({
+  deckId,
+  deckName,
+  initialCards,
+  streakDays,
+  reviewedTodayBeforeSession,
+}: Props) {
   const [cards, setCards] = useState<StudyCardItem[]>(initialCards)
   const [currentIdx, setCurrentIdx] = useState(0)
   const [revealed, setRevealed] = useState(false)
@@ -149,12 +157,15 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
       <StudyOutcome
         variant="complete"
         deckId={deckId}
+        deckName={deckName}
         stats={{
           recalled: counts.easy + counts.good,
           hard: counts.hard,
           again: counts.again,
           total: counts.again + counts.hard + counts.good + counts.easy,
           elapsedMs,
+          successfulRecallCount: counts.easy + counts.good,
+          streak: reviewedTodayBeforeSession ? streakDays : streakDays + 1,
         }}
       />
     )
@@ -162,21 +173,21 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface text-on-surface">
-      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-[12px]">
-        <div className="relative mx-auto flex w-full max-w-screen-2xl items-center justify-between px-4 py-4 sm:px-8">
+      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-4 py-4 sm:px-8">
           <button
             onClick={() => window.history.back()}
-            className="flex cursor-pointer items-center gap-2 text-on-surface-variant transition-colors hover:text-primary"
+            className="flex cursor-pointer items-center gap-2 text-on-surface-variant transition-colors hover:text-primary shrink-0"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="size-4" />
             <span className="text-sm font-medium">Exit</span>
           </button>
 
-          <h1 className="absolute left-1/2 max-w-[150px] -translate-x-1/2 truncate text-headline-sm text-primary sm:max-w-xs">
+          <h1 className="truncate max-w-[40vw] sm:max-w-xs text-headline-sm text-on-surface font-bold text-center px-2">
             {deckName}
           </h1>
 
-          <span className="text-body-sm font-medium text-on-surface-variant">
+          <span className="text-body-sm font-medium text-on-surface-variant tabular shrink-0">
             {reviewedCount} / {sessionTotal}
           </span>
         </div>
@@ -185,7 +196,7 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
         <div className="h-[2px] w-full overflow-hidden bg-surface-container-high">
           <div
             className={cn(
-              "h-full bg-tertiary transition-all duration-500",
+              "h-full bg-state-mastered transition-all duration-500",
               isPending && "animate-pulse"
             )}
             style={{ width: `${progressPct}%` }}
@@ -212,15 +223,15 @@ export function StudySession({ deckId, deckName, initialCards }: Props) {
         />
       </main>
 
-      <footer className="px-8 pt-4 pb-10">
-        <div className="mx-auto flex max-w-screen-2xl items-center justify-between text-on-surface-variant/40">
+      <footer className="px-4 sm:px-8 pt-4 pb-10">
+        <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-3 text-on-surface-variant/50">
           <div className="flex items-center gap-2">
-            <Command className="h-4 w-4" />
-            <span className="text-label-sm uppercase">
+            <Command className="size-4" />
+            <span className="text-label-sm uppercase font-semibold">
               {revealed ? "Hotkeys: 1, 2, 3, 4 · Space to hide" : "Space to reveal"}
             </span>
           </div>
-          <span className="text-label-sm uppercase">
+          <span className="text-label-sm uppercase font-semibold">
             {remaining} cards left
             {requeued > 0 && ` · ${requeued} to redo`}
           </span>

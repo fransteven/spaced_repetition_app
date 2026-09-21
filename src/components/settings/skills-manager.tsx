@@ -10,10 +10,14 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { SearchField } from "@/components/primitives/search-field"
 import { NoResults } from "@/components/primitives/no-results"
+import { SectionHeading } from "@/components/primitives/section-heading"
+import { Surface } from "@/components/primitives/surface"
+import { Pill } from "@/components/primitives/pill"
 import { useListSearch } from "@/hooks/use-list-search"
 import { CreateSkillSchema } from "@/lib/validations"
 import type { z } from "zod"
 import type { SkillItem } from "@/lib/services/skill-service"
+import { toast } from "sonner"
 
 type SkillFormValues = z.infer<typeof CreateSkillSchema>
 
@@ -51,7 +55,6 @@ interface Props {
 
 export function SkillsManager({ initialSkills }: Props): React.JSX.Element {
   const [skills, setSkills] = useState<SkillItem[]>(initialSkills)
-  const [submitError, setSubmitError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const getSkillHaystack = useCallback(
@@ -78,7 +81,6 @@ export function SkillsManager({ initialSkills }: Props): React.JSX.Element {
   })
 
   const onSubmit = async (data: SkillFormValues) => {
-    setSubmitError(null)
     try {
       const res = await fetch("/api/skills", {
         method: "POST",
@@ -87,26 +89,31 @@ export function SkillsManager({ initialSkills }: Props): React.JSX.Element {
       })
       const json = await res.json()
       if (!res.ok) {
-        setSubmitError(json.error?.message ?? "Failed to create skill.")
+        toast.error(json.error?.message ?? "Failed to create skill.")
         return
       }
       setSkills((prev) => [...prev, { ...json.data, isCustom: true }])
+      toast.success("Skill created successfully!")
       reset()
     } catch (err) {
-      console.error('[SkillsManager create]', err)
-      setSubmitError("An unexpected error occurred.")
+      console.error("[SkillsManager create]", err)
+      toast.error("An unexpected error occurred.")
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, name: string) => {
     setDeletingId(id)
     try {
       const res = await fetch(`/api/skills/${id}`, { method: "DELETE" })
       if (res.ok) {
         setSkills((prev) => prev.filter((s) => s.id !== id))
+        toast.success(`Skill "${name}" deleted`)
+      } else {
+        toast.error("Failed to delete skill")
       }
     } catch (err) {
-      console.error('[SkillsManager delete]', err)
+      console.error("[SkillsManager delete]", err)
+      toast.error("Failed to delete skill")
     } finally {
       setDeletingId(null)
     }
@@ -117,10 +124,11 @@ export function SkillsManager({ initialSkills }: Props): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-10">
+      {/* Search Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-on-surface">Skills</h2>
-          <p className="text-sm text-on-surface-variant">Browse and manage AI examiner skills</p>
+          <h2 className="text-headline-sm font-bold tracking-tight text-on-surface">Skills</h2>
+          <p className="text-body-sm text-on-surface-variant">Browse and manage AI examiner skills</p>
         </div>
         <SearchField
           value={query}
@@ -136,52 +144,74 @@ export function SkillsManager({ initialSkills }: Props): React.JSX.Element {
         <>
           {/* Predefined skills */}
           {predefined.length > 0 && (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold text-on-surface">Built-in skills</h2>
-              <div className="flex flex-col gap-2">
+            <section className="flex flex-col gap-4">
+              <SectionHeading
+                title="Built-in skills"
+                description="Core evaluation rubrics included with NeuroCards"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {predefined.map((skill) => (
-                  <div
+                  <Surface
                     key={skill.id}
-                    className="bg-surface-container-low rounded-lg px-4 py-3"
+                    tone="panel"
+                    className="p-4 rounded-xl flex flex-col justify-between gap-2"
                   >
-                    <p className="text-sm font-semibold text-on-surface">{skill.name}</p>
-                    <p className="text-xs text-on-surface-variant mt-0.5">{skill.topic}</p>
-                  </div>
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-body-md font-semibold text-on-surface">{skill.name}</p>
+                        <Pill tone="neutral" size="sm">Built-in</Pill>
+                      </div>
+                      <p className="text-body-sm text-on-surface-variant mt-1">{skill.topic}</p>
+                    </div>
+                  </Surface>
                 ))}
               </div>
             </section>
           )}
 
           {/* Custom skills */}
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold text-on-surface">Your custom skills</h2>
+          <section className="flex flex-col gap-4">
+            <SectionHeading
+              title="Your custom skills"
+              description="Personalized rubrics for specialized subjects"
+            />
             {custom.length === 0 ? (
-              <p className="text-sm text-on-surface-variant">
-                {isSearching
-                  ? "No custom skills match this filter."
-                  : "No custom skills yet — add one below to focus exams on a topic you care about."}
-              </p>
+              <Surface tone="panel" className="p-6 rounded-xl text-center">
+                <p className="text-body-sm text-on-surface-variant">
+                  {isSearching
+                    ? "No custom skills match this filter."
+                    : "No custom skills yet — create one below to guide AI examination on specific topics."}
+                </p>
+              </Surface>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 gap-3">
                 {custom.map((skill) => (
-                  <div
+                  <Surface
                     key={skill.id}
-                    className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-4 py-3 flex items-start justify-between gap-3"
+                    tone="card"
+                    className="p-4 sm:p-5 rounded-xl flex items-start justify-between gap-4"
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-on-surface">{skill.name}</p>
-                      <p className="text-xs text-on-surface-variant mt-0.5">{skill.topic}</p>
-                      <p className="text-xs text-on-surface-variant/70 mt-1">{skill.rubric}</p>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-body-md font-semibold text-on-surface">{skill.name}</p>
+                        <Pill tone="mastered" size="sm">Custom</Pill>
+                      </div>
+                      <p className="text-body-sm text-on-surface-variant">{skill.topic}</p>
+                      {skill.rubric && (
+                        <p className="text-label-md text-on-surface-variant/80 pt-1 leading-relaxed">
+                          {skill.rubric}
+                        </p>
+                      )}
                     </div>
                     <button
-                      onClick={() => handleDelete(skill.id)}
+                      onClick={() => handleDelete(skill.id, skill.name)}
                       disabled={deletingId === skill.id}
                       aria-label={`Delete ${skill.name}`}
-                      className="text-on-surface-variant hover:text-error transition-colors cursor-pointer disabled:opacity-50"
+                      className="text-on-surface-variant hover:text-error transition-colors p-1.5 rounded-lg hover:bg-surface-container-high cursor-pointer disabled:opacity-50 shrink-0"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="size-4" />
                     </button>
-                  </div>
+                  </Surface>
                 ))}
               </div>
             )}
@@ -190,72 +220,88 @@ export function SkillsManager({ initialSkills }: Props): React.JSX.Element {
       )}
 
       {/* Add custom skill form */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-on-surface">Add a custom skill</h2>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 pt-2">
-          {submitError && <p className="text-sm text-error">{submitError}</p>}
+      <section className="flex flex-col gap-4">
+        <SectionHeading
+          title="Add a custom skill"
+          description="Create a rubric to guide the AI examiner's questions and feedback"
+        />
+        <Surface tone="card" className="p-5 sm:p-6 rounded-2xl">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="skill-name" className="text-label-md text-on-surface-variant">
+                  Skill Name
+                </Label>
+                <Input
+                  id="skill-name"
+                  placeholder="e.g. Organic Chemistry"
+                  aria-invalid={Boolean(errors.name)}
+                  {...register("name")}
+                  className="h-10 text-body-md"
+                />
+                {errors.name && <p className="text-label-sm text-error">{errors.name.message}</p>}
+              </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="skill-name">Name</Label>
-            <Input
-              id="skill-name"
-              placeholder="e.g. Organic chemistry"
-              aria-invalid={Boolean(errors.name)}
-              {...register("name")}
-            />
-            {errors.name && <p className="text-sm text-error">{errors.name.message}</p>}
-          </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="skill-topic" className="text-label-md text-on-surface-variant">
+                  Topic
+                </Label>
+                <Input
+                  id="skill-topic"
+                  placeholder="e.g. Reaction Mechanisms"
+                  aria-invalid={Boolean(errors.topic)}
+                  {...register("topic")}
+                  className="h-10 text-body-md"
+                />
+                {errors.topic && <p className="text-label-sm text-error">{errors.topic.message}</p>}
+              </div>
+            </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="skill-topic">Topic</Label>
-            <Input
-              id="skill-topic"
-              placeholder="e.g. Reaction mechanisms"
-              aria-invalid={Boolean(errors.topic)}
-              {...register("topic")}
-            />
-            {errors.topic && <p className="text-sm text-error">{errors.topic.message}</p>}
-          </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="skill-rubric" className="text-label-md text-on-surface-variant">
+                Rubric (instructions for the AI tutor)
+              </Label>
+              <Textarea
+                id="skill-rubric"
+                rows={3}
+                placeholder="e.g. Ask the student to predict the product of a reaction and explain the transition state."
+                aria-invalid={Boolean(errors.rubric)}
+                {...register("rubric")}
+                className="text-body-md"
+              />
+              {errors.rubric && <p className="text-label-sm text-error">{errors.rubric.message}</p>}
+            </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="skill-rubric">Rubric (instructions for the tutor)</Label>
-            <Textarea
-              id="skill-rubric"
-              rows={3}
-              placeholder="e.g. Ask the student to predict the product of a reaction shown on the card and explain the mechanism."
-              aria-invalid={Boolean(errors.rubric)}
-              {...register("rubric")}
-            />
-            {errors.rubric && <p className="text-sm text-error">{errors.rubric.message}</p>}
-          </div>
-
-          <Button type="submit" disabled={isSubmitting} className="self-start">
-            <Sparkles className="h-4 w-4" />
-            {isSubmitting ? "Adding…" : "Add skill"}
-          </Button>
-        </form>
+            <Button type="submit" disabled={isSubmitting} className="self-start gap-2 mt-2">
+              <Sparkles className="size-4" />
+              {isSubmitting ? "Adding…" : "Add skill"}
+            </Button>
+          </form>
+        </Surface>
       </section>
 
       {/* Skill repository links */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-on-surface">Find more skills</h2>
-        <p className="text-sm text-on-surface-variant">
-          Browse these community collections for rubric ideas, then paste one in above.
-        </p>
-        <div className="flex flex-col gap-2">
+      <section className="flex flex-col gap-4">
+        <SectionHeading
+          title="Find more skills"
+          description="Browse community collections for rubric ideas to adapt"
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SKILL_REPOS.map((repo) => (
             <a
               key={repo.url}
               href={repo.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between gap-3 bg-surface-container-low rounded-lg px-4 py-3 hover:bg-surface-bright transition-colors"
+              className="flex items-center justify-between gap-3 bg-surface-container-low hover:bg-surface-container-high rounded-xl p-4 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <div>
-                <p className="text-sm font-semibold text-on-surface">{repo.name}</p>
-                <p className="text-xs text-on-surface-variant mt-0.5">{repo.description}</p>
+                <p className="text-body-md font-semibold text-on-surface group-hover:text-primary transition-colors">
+                  {repo.name}
+                </p>
+                <p className="text-body-sm text-on-surface-variant mt-0.5">{repo.description}</p>
               </div>
-              <ExternalLink className="h-4 w-4 text-on-surface-variant shrink-0" />
+              <ExternalLink className="size-4 text-on-surface-variant shrink-0 group-hover:text-primary transition-colors" />
             </a>
           ))}
         </div>

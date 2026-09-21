@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { cards, cardSchedules, decks, reviewLogs } from '@/lib/db/schema';
 import { listDecksForUser } from '@/lib/services/deck-service';
 import type { TimelineItem } from '@/components/dashboard/timeline-list';
+import { getStabilityBucket, getLearningState, type LearningStateBucket } from '@/lib/learning-state';
 
 export interface DashboardDeckData {
   id: string;
@@ -14,18 +15,30 @@ export interface DashboardDeckData {
   mastery: number;
 }
 
+export interface HeatmapDay {
+  date: string;
+  count: number;
+  level: number;
+}
+
 export interface DashboardStats {
   dueToday: number;
   dueDeckCount: number;
   masteredTotal: number;
   streakDays: number;
+  reviewedToday: number;
 }
 
 export interface DashboardData {
   stats: DashboardStats;
   decks: DashboardDeckData[];
-  heatmap: number[];
+  heatmap: HeatmapDay[];
   timeline: TimelineItem[];
+}
+
+export interface StreakStatus {
+  days: number;
+  reviewedToday: boolean;
 }
 
 const OPACITY_THRESHOLDS = [
@@ -45,10 +58,10 @@ function countToOpacity(count: number): number {
   return 10;
 }
 
-function stabilityBucket(stability: number): { label: string; meta: string; dotColor: string; labelColor: string } {
-  if (stability < 10)  return { label: 'Struggling',    meta: 'Struggling · Re-evaluation', dotColor: 'bg-error',    labelColor: 'text-error' };
-  if (stability < 50)  return { label: 'Intermediate',  meta: 'Intermediate · Spaced Interval', dotColor: 'bg-primary',  labelColor: 'text-primary' };
-  return                      { label: 'Mastered',      meta: 'Mastered · Maintenance',     dotColor: 'bg-tertiary', labelColor: 'text-tertiary' };
+function stabilityBucket(stability: number): { bucket: LearningStateBucket; label: string; meta: string } {
+  const bucket = getStabilityBucket(stability);
+  const state = getLearningState(bucket);
+  return { bucket, label: state.label, meta: state.meta };
 }
 
 function relativeLabel(date: Date, now: Date): string {
@@ -60,32 +73,39 @@ function relativeLabel(date: Date, now: Date): string {
   return formatDistanceToNowStrict(date, { addSuffix: false });
 }
 
-async function getStreakDays(userId: string, now: Date): Promise<number> {
+export async function getStreakStatus(userId: string, now: Date): Promise<StreakStatus> {
   const rows = await db
     .selectDistinct({ d: sql<string>`date(${reviewLogs.reviewed_at})` })
     .from(reviewLogs)
     .where(eq(reviewLogs.user_id, userId))
     .orderBy(sql`date(${reviewLogs.reviewed_at}) desc`);
 
-  if (rows.length === 0) return 0;
+  if (rows.length === 0) return { days: 0, reviewedToday: false };
 
   // Allow streak to still count if user hasn't studied yet today
   const anchor = startOfDay(now);
   let streak = 0;
   let cursor = anchor;
+  let reviewedToday = false;
 
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     const rowDate = startOfDay(new Date(row.d));
     const diff = differenceInCalendarDays(cursor, rowDate);
+    if (index === 0) reviewedToday = diff === 0;
     if (diff > 1) break; // gap — streak ends
     streak++;
     cursor = rowDate;
   }
 
-  return streak;
+  return { days: streak, reviewedToday };
 }
 
-async function getHeatmap(userId: string, now: Date): Promise<number[]> {
+export async function getStreakDays(userId: string, now: Date): Promise<number> {
+  const status = await getStreakStatus(userId, now);
+  return status.days;
+}
+
+async function getHeatmap(userId: string, now: Date): Promise<HeatmapDay[]> {
   const since = subDays(now, 69); // 70 days including today
 
   const rows = await db
@@ -110,7 +130,12 @@ async function getHeatmap(userId: string, now: Date): Promise<number[]> {
   return Array.from({ length: 70 }, (_, i) => {
     const day = subDays(now, 69 - i);
     const key = day.toISOString().slice(0, 10);
-    return countToOpacity(countByDay.get(key) ?? 0);
+    const count = countByDay.get(key) ?? 0;
+    return {
+      date: key,
+      count,
+      level: countToOpacity(count),
+    };
   });
 }
 
@@ -156,21 +181,30 @@ async function getTimeline(userId: string, now: Date): Promise<TimelineItem[]> {
     deck:       g.deck,
     cards:      g.count,
     meta:       g.bucket.meta,
-    dotColor:   g.bucket.dotColor,
-    labelColor: g.bucket.labelColor,
+    bucket:     g.bucket.bucket,
   }));
 }
 
 export async function getDashboardData(userId: string): Promise<DashboardData> {
   const now = new Date();
 
-  const [deckList, streakDays, heatmap, timeline] = await Promise.all([
+  const [deckList, streakDays, heatmap, timeline, [reviewedTodayRow]] = await Promise.all([
     listDecksForUser(userId),
     getStreakDays(userId, now),
     getHeatmap(userId, now),
     getTimeline(userId, now),
+    db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(reviewLogs)
+      .where(
+        and(
+          eq(reviewLogs.user_id, userId),
+          gte(reviewLogs.reviewed_at, startOfDay(now)),
+        )
+      ),
   ]);
 
+  const reviewedToday = reviewedTodayRow?.count ?? 0;
   const dueToday    = deckList.reduce((s, d) => s + d.due_count, 0);
   const dueDeckCount = deckList.filter(d => d.due_count > 0).length;
   const masteredTotal = deckList.reduce((s, d) => s + d.mastered_count, 0);
@@ -185,7 +219,7 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   }));
 
   return {
-    stats: { dueToday, dueDeckCount, masteredTotal, streakDays },
+    stats: { dueToday, dueDeckCount, masteredTotal, streakDays, reviewedToday },
     decks: mappedDecks,
     heatmap,
     timeline,

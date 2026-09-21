@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   isNavActive,
+  NAV_TAGLINE,
   PRIMARY_NAV,
   SECONDARY_NAV,
   SIDEBAR_WIDTH,
@@ -19,7 +20,7 @@ function SidebarLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-colors",
+        "relative flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-colors duration-150",
         active
           ? "bg-primary/10 font-semibold text-primary"
           : "font-medium text-on-surface-variant hover:bg-surface-container hover:text-primary"
@@ -32,7 +33,7 @@ function SidebarLink({ item, active }: { item: NavItem; active: boolean }) {
           className="absolute top-2 bottom-2 left-0 w-[2px] rounded-full bg-primary"
         />
       )}
-      <Icon className="h-5 w-5" />
+      <Icon className={cn("h-5 w-5", active ? "text-primary" : "text-on-surface-variant")} />
       {item.label}
     </Link>
   )
@@ -48,11 +49,11 @@ export function Sidebar() {
         SIDEBAR_WIDTH
       )}
     >
-      <p className="mb-8 pl-4 text-label-sm text-on-surface-variant uppercase">
-        The Digital Curator
+      <p className="mb-8 pl-4 text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold">
+        {NAV_TAGLINE}
       </p>
 
-      <nav className="flex-1 space-y-2">
+      <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
         {PRIMARY_NAV.map((item) => (
           <SidebarLink key={item.href} item={item} active={isNavActive(pathname, item.href)} />
         ))}

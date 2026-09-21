@@ -42,8 +42,16 @@ export default async function StudyPage({ params }: Props): Promise<React.JSX.El
   }
 
   if (data.cards.length === 0) {
-    return <StudyOutcome variant="caught-up" deckId={id} />
+    return <StudyOutcome variant="caught-up" deckId={id} deckName={data.deckName} />
   }
 
-  return <StudySession deckId={id} deckName={data.deckName} initialCards={data.cards} />
+  return (
+    <StudySession
+      deckId={id}
+      deckName={data.deckName}
+      initialCards={data.cards}
+      streakDays={data.streakDays}
+      reviewedTodayBeforeSession={data.reviewedTodayBeforeSession}
+    />
+  )
 }

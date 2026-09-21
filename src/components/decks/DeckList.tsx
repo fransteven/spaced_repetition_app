@@ -10,6 +10,7 @@ import { CreateDeckDialog } from '@/components/decks/CreateDeckDialog';
 import { EditDeckDialog } from '@/components/decks/EditDeckDialog';
 import { DeleteDeckDialog } from '@/components/decks/DeleteDeckDialog';
 import { Button } from '@/components/ui/button';
+import { FilterChip } from '@/components/primitives/filter-chip';
 import { SearchField } from '@/components/primitives/search-field';
 import { NoResults } from '@/components/primitives/no-results';
 import { PageSection } from '@/components/layout/page-header';
@@ -91,18 +92,17 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
 
   return (
     <>
-      <PageSection className="mb-8 flex flex-col flex-wrap items-center gap-3 rounded-xl bg-surface-container-low p-2 sm:flex-row">
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+      <PageSection className="mb-8 flex flex-col flex-wrap items-center gap-3 rounded-2xl bg-surface-container-low p-2.5 sm:flex-row">
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
           {dynamicFilters.map((filter) => (
-            <Button
+            <FilterChip
               key={filter}
               type="button"
-              variant={activeFilter === filter ? 'default' : 'ghost'}
+              active={activeFilter === filter}
               onClick={() => setActiveFilter(filter)}
-              className="px-4 py-1.5 text-xs sm:px-5 sm:text-sm"
             >
               {filter}
-            </Button>
+            </FilterChip>
           ))}
         </div>
 
@@ -116,7 +116,7 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
         <Button
           type="button"
           onClick={() => setCreateOpen(true)}
-          className="w-full whitespace-nowrap sm:w-auto"
+          className="w-full whitespace-nowrap sm:w-auto cursor-pointer"
         >
           <Plus className="mr-1 h-4 w-4" />
           New deck
@@ -137,7 +137,7 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
           }}
         />
       ) : (
-        <PageSection className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <PageSection className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((deck) => (
             <DeckCard
               key={deck.id}

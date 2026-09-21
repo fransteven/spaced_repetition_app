@@ -3,10 +3,11 @@ import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { listSkills } from "@/lib/services/skill-service"
 import { SkillsManager } from "@/components/settings/skills-manager"
+import { PageHeader, PageSection } from "@/components/layout/page-header"
 
 export const metadata: Metadata = {
-  title: "Configuración",
-  description: "Manage your skills and NeuroCards settings",
+  title: "Settings — NeuroCards",
+  description: "Manage AI examiner skills and study preferences",
 }
 
 export default async function SettingsPage(): Promise<React.JSX.Element> {
@@ -16,15 +17,19 @@ export default async function SettingsPage(): Promise<React.JSX.Element> {
   const skills = await listSkills(session.user.id)
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10 flex flex-col gap-10">
-      <div>
-        <h1 className="text-3xl font-bold text-primary tracking-tight">Settings</h1>
-        <p className="text-on-surface-variant text-sm mt-1">
-          Manage the skills the AI examiner draws on during &ldquo;Quiz me with AI&rdquo; sessions.
+    <>
+      <PageHeader>
+        <h1 className="mb-2 text-display-lg text-on-surface">Settings</h1>
+        <p className="max-w-lg text-body-lg text-on-surface-variant">
+          Manage the skills the AI examiner draws on during study sessions.
         </p>
-      </div>
+      </PageHeader>
 
-      <SkillsManager initialSkills={skills} />
-    </div>
+      <PageSection>
+        <div className="max-w-4xl">
+          <SkillsManager initialSkills={skills} />
+        </div>
+      </PageSection>
+    </>
   )
 }

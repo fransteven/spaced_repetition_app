@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Pill } from '@/components/primitives/pill';
 import { Surface } from '@/components/primitives/surface';
+import { MasteryThread } from '@/components/primitives/mastery-thread';
 
 export interface DeckWithStats {
   id: string;
@@ -62,24 +63,26 @@ export function DeckCard({
   const accent = subjectAccent(subject);
 
   const breakdown = [
-    { label: 'Due', value: due_count, dot: 'bg-error' },
-    { label: 'Learning', value: learning_count, dot: 'bg-secondary' },
-    { label: 'Mastered', value: mastered_count, dot: 'bg-tertiary' },
+    { label: 'Due', value: due_count, dot: 'bg-state-struggling' },
+    { label: 'Learning', value: learning_count, dot: 'bg-state-intermediate' },
+    { label: 'Mastered', value: mastered_count, dot: 'bg-state-mastered' },
   ];
 
   return (
     <Surface
       ghost
       interactive
-      className="group relative flex flex-col justify-between overflow-hidden p-6"
+      className="group relative flex flex-col justify-between overflow-hidden p-5 sm:p-6"
     >
       {state === 'mastered' && (
-        <div className="pointer-events-none absolute -top-4 -right-4 h-24 w-24 rounded-full bg-tertiary/5 blur-2xl" />
+        <div className="pointer-events-none absolute -top-4 -right-4 h-24 w-24 rounded-full bg-state-mastered/10 blur-2xl" />
       )}
 
       <div>
         <div className="mb-4 flex items-start justify-between gap-2">
-          <Pill className={accent.pill}>{formatSubject(subject)}</Pill>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Pill className={accent.pill} size="sm">{formatSubject(subject)}</Pill>
+          </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -121,9 +124,9 @@ export function DeckCard({
         <p className="mb-6 text-body-md text-on-surface-variant">
           {total_cards} cards ·{' '}
           {fullyMastered ? (
-            <span className="font-semibold text-tertiary">Fully mastered</span>
+            <span className="font-semibold text-state-mastered">Fully mastered</span>
           ) : due_count > 0 ? (
-            <span className="font-semibold text-error">{due_count} due</span>
+            <span className="font-semibold text-state-struggling">{due_count} due</span>
           ) : (
             <span className="italic">0 due</span>
           )}
@@ -131,24 +134,20 @@ export function DeckCard({
 
         <div className="mb-8 space-y-4">
           <div>
-            <div className="mb-1 flex justify-between text-label-sm text-on-surface-variant uppercase">
+            <div className="mb-1.5 flex justify-between text-label-sm text-on-surface-variant uppercase font-semibold">
               <span>Mastery progress</span>
-              <span>{mastery}%</span>
+              <span className="tabular">{mastery}%</span>
             </div>
-            {/* 2px thread — DESIGN.md §5 */}
-            <div className="h-0.5 w-full overflow-hidden rounded-full bg-surface-container-high">
-              <div className="h-full bg-tertiary" style={{ width: `${mastery}%` }} />
-            </div>
+            <MasteryThread value={mastery} />
           </div>
 
-          {/* Labelled, not bare dots — the colours alone carried no meaning and
-              a tooltip would be unreachable on touch. */}
+          {/* Labelled breakdown with semantic dots */}
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {breakdown.map(({ label, value, dot }) => (
               <li key={label} className="flex items-center gap-1.5">
-                <span aria-hidden className={cn('h-2 w-2 rounded-full', dot)} />
-                <span className="text-label-sm text-on-surface-variant uppercase">
-                  {label} {value}
+                <span aria-hidden className={cn('size-2 rounded-full', dot)} />
+                <span className="text-label-sm text-on-surface-variant uppercase font-semibold">
+                  {label} <span className="tabular">{value}</span>
                 </span>
               </li>
             ))}
@@ -156,7 +155,7 @@ export function DeckCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
         <span className="text-body-sm text-on-surface-variant italic">
           Last studied {last_studied_label}
         </span>
@@ -165,6 +164,7 @@ export function DeckCard({
           href={`/study/${id}`}
           className={buttonVariants({
             variant: state === 'study' ? 'default' : 'secondary',
+            size: 'lg',
           })}
         >
           {state === 'study' ? 'Study now' : state === 'review' ? 'Review' : 'Refresh'}

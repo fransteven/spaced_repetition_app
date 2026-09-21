@@ -13,9 +13,10 @@ import { cn } from "@/lib/utils"
 const surfaceVariants = cva("", {
   variants: {
     tone: {
-      card: "bg-card rounded-md",
-      panel: "bg-surface-container-low rounded-lg",
-      canvas: "bg-surface rounded-lg",
+      card: "bg-card rounded-xl",
+      panel: "bg-surface-container-low rounded-2xl",
+      canvas: "bg-surface rounded-2xl",
+      stat: "bg-card rounded-xl p-6 sm:p-8",
     },
     /** Ghost Border — outline-variant at 15%, felt rather than seen (§4). */
     ghost: {
@@ -30,8 +31,14 @@ const surfaceVariants = cva("", {
   compoundVariants: [
     // Static panels avoid shadows entirely (§4 "Tonal Layering").
     { tone: "card", class: "shadow-ambient" },
+    { tone: "stat", class: "shadow-ambient" },
     {
       tone: "card",
+      interactive: true,
+      class: "hover:shadow-ambient-lg hover:bg-surface-bright",
+    },
+    {
+      tone: "stat",
       interactive: true,
       class: "hover:shadow-ambient-lg hover:bg-surface-bright",
     },

@@ -5,6 +5,7 @@ import { ServiceError } from '@/lib/services/service-error';
 import { review, previewIntervals } from '@/lib/fsrs/algorithm';
 import type { FsrsRating, ScheduleInput } from '@/lib/fsrs/types';
 import { assertCardOwnership } from '@/lib/services/card-service';
+import { getStreakStatus } from '@/lib/services/dashboard-service';
 
 export interface StudyCardItem {
   card_id:     string;
@@ -12,13 +13,16 @@ export interface StudyCardItem {
   back:        string;
   image_url_1: string | null;
   image_url_2: string | null;
+  stability:   number;
   state:       'new' | 'learning' | 'review' | 'relearning';
   previews:    Record<FsrsRating, number>;
 }
 
 export interface StudySessionData {
-  deckName: string;
-  cards:    StudyCardItem[];
+  deckName:   string;
+  cards:      StudyCardItem[];
+  streakDays: number;
+  reviewedTodayBeforeSession: boolean;
 }
 
 export async function getStudySession(userId: string, deckId: string): Promise<StudySessionData> {
@@ -106,12 +110,20 @@ export async function getStudySession(userId: string, deckId: string): Promise<S
       back:        r.back,
       image_url_1: r.image_url_1,
       image_url_2: r.image_url_2,
+      stability:   r.stability,
       state:       r.state,
       previews:    previewIntervals(scheduleInput, now),
     };
   });
 
-  return { deckName: deck.name, cards: studyCards };
+  const streakStatus = await getStreakStatus(userId, now);
+
+  return {
+    deckName: deck.name,
+    cards: studyCards,
+    streakDays: streakStatus.days,
+    reviewedTodayBeforeSession: streakStatus.reviewedToday,
+  };
 }
 
 export async function submitReview(

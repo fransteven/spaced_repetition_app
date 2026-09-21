@@ -10,9 +10,12 @@ import { DeleteCardDialog } from '@/components/cards/DeleteCardDialog';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/primitives/pill';
 import { Surface } from '@/components/primitives/surface';
+import { EmptyState } from '@/components/primitives/empty-state';
+import { FilterChip } from '@/components/primitives/filter-chip';
 import { SearchField } from '@/components/primitives/search-field';
 import { NoResults } from '@/components/primitives/no-results';
 import { useListSearch } from '@/hooks/use-list-search';
+import { getStabilityBucket } from '@/lib/learning-state';
 import type { CardData } from '@/lib/validations';
 
 interface CardRow extends CardData {
@@ -31,10 +34,9 @@ interface CardListProps {
 }
 
 const STATE_TONE: Record<string, React.ComponentProps<typeof Pill>['tone']> = {
-  new: 'neutral',
-  learning: 'secondary',
-  relearning: 'error',
-  review: 'tertiary',
+  new: 'new',
+  learning: 'intermediate',
+  relearning: 'struggling',
 };
 
 const STATE_FILTERS: string[] = ['All', 'new', 'learning', 'relearning', 'review'];
@@ -56,6 +58,14 @@ function scheduleLabel(card: CardRow): string | null {
   }
 
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function stateTone(card: CardRow): React.ComponentProps<typeof Pill>['tone'] {
+  if (card.state === 'review' && typeof card.stability === 'number') {
+    return getStabilityBucket(card.stability);
+  }
+
+  return STATE_TONE[card.state ?? ''] ?? 'neutral';
 }
 
 export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Element {
@@ -112,25 +122,23 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
       <>
         <div className="mb-6 flex items-center justify-between">
           <p className="text-body-md text-on-surface-variant">No cards yet</p>
-          <Button type="button" onClick={openCreate}>
+          <Button type="button" onClick={openCreate} className="cursor-pointer">
             <Plus className="mr-2 h-4 w-4" />
             Add card
           </Button>
         </div>
 
-        <Surface tone="panel" className="flex flex-col items-center justify-center px-6 py-24 text-center">
-          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-surface-container-highest">
-            <Layers className="h-9 w-9 text-primary" />
-          </div>
-          <h3 className="mb-3 text-display-sm text-on-surface">Blank slate</h3>
-          <p className="mb-6 max-w-sm text-body-lg text-on-surface-variant">
-            Add your first card to start building your study material.
-          </p>
-          <Button type="button" variant="secondary" onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add your first card
-          </Button>
-        </Surface>
+        <EmptyState
+          icon={<Layers className="size-9" />}
+          title="Blank slate"
+          body="Add your first card to start building your study material."
+          action={
+            <Button type="button" size="lg" onClick={openCreate} className="cursor-pointer font-semibold">
+              <Plus className="mr-2 h-4 w-4" />
+              Add your first card
+            </Button>
+          }
+        />
 
         <CardEditor
           open={editorOpen}
@@ -151,24 +159,24 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
               ? `${filteredCards.length} of ${initialCards.length} cards`
               : `${initialCards.length} card${initialCards.length !== 1 ? 's' : ''}`}
           </p>
-          <Button type="button" onClick={openCreate}>
+          <Button type="button" onClick={openCreate} className="cursor-pointer">
             <Plus className="mr-2 h-4 w-4" />
             Add card
           </Button>
         </div>
 
-        <div className="flex flex-col flex-wrap items-center gap-3 rounded-xl bg-surface-container-low p-2 sm:flex-row">
+        <div className="flex flex-col flex-wrap items-center gap-3 rounded-2xl bg-surface-container-low p-2.5 sm:flex-row">
           <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
             {STATE_FILTERS.map((filter) => (
-              <Button
+              <FilterChip
                 key={filter}
                 type="button"
-                variant={activeState === filter ? 'default' : 'ghost'}
+                active={activeState === filter}
                 onClick={() => setActiveState(filter)}
-                className="capitalize px-3 py-1.5 text-xs sm:px-4 sm:text-sm"
+                className="capitalize"
               >
                 {filter}
-              </Button>
+              </FilterChip>
             ))}
           </div>
 
@@ -195,7 +203,7 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
           }}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {filteredCards.map((card) => {
             const schedule = scheduleLabel(card);
             return (
@@ -203,11 +211,11 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
                 key={card.id}
                 ghost
                 interactive
-                className="group flex flex-col gap-5 p-5"
+                className="group flex flex-col gap-5 p-5 sm:p-6"
               >
                 <div className="flex items-start justify-between gap-2">
                   {card.state && (
-                    <Pill tone={STATE_TONE[card.state] ?? 'neutral'} className="px-2.5 py-0.5">
+                    <Pill tone={stateTone(card)} className="px-2.5 py-0.5">
                       {card.state}
                     </Pill>
                   )}

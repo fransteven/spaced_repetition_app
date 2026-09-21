@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
-import { LogOut } from "lucide-react"
+import { LogOut, Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import {
   isNavActive,
+  NAV_TAGLINE,
   PRIMARY_NAV,
   SECONDARY_NAV,
   type NavItem,
@@ -56,10 +57,25 @@ export function MobileDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="bg-surface-container-low lg:hidden">
         <SheetHeader>
-          <SheetTitle className="text-label-sm text-on-surface-variant uppercase">
-            The Digital Curator
+          <SheetTitle className="text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold">
+            {NAV_TAGLINE}
           </SheetTitle>
         </SheetHeader>
+
+        <div className="px-4 mb-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              onOpenChange(false)
+              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
+            }}
+            className="w-full justify-start gap-2 text-on-surface-variant text-body-sm h-10"
+          >
+            <Search className="size-4 text-outline" />
+            <span>Search decks… (⌘K)</span>
+          </Button>
+        </div>
 
         <nav className="space-y-1 px-4">{PRIMARY_NAV.map(renderLink)}</nav>
 

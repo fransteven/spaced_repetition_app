@@ -5,8 +5,8 @@ import { listDecksForUserPage } from '@/lib/services/deck-service';
 import { RemindersContent } from '@/components/reminders/reminders-content';
 
 export const metadata: Metadata = {
-  title: 'Recordatorios',
-  description: 'Programas de repaso automatizados y sincronizados con Google Calendar',
+  title: 'Reminders — NeuroCards',
+  description: 'Automated review schedules and daily study digest reminders',
 };
 
 export default async function RemindersPage() {

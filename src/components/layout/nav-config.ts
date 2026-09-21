@@ -7,6 +7,9 @@ import { Bell, Layers, LayoutDashboard, Settings, type LucideIcon } from "lucide
  */
 export const SIDEBAR_WIDTH = "w-64"
 export const SIDEBAR_OFFSET = "lg:ml-64"
+export const CONTENT_PADDING = "px-4 sm:px-6 lg:pl-16 lg:pr-10"
+export const SHELL_CLEARANCE = "pt-20 sm:pt-24 pb-24 lg:pb-12"
+export const NAV_TAGLINE = "Calm & Reward"
 
 export interface NavItem {
   icon: LucideIcon

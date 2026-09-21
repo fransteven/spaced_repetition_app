@@ -1,27 +1,42 @@
 "use client"
 
-import { PlusCircle, Plus } from "lucide-react"
+import React from "react"
+import Link from "next/link"
+import { Bell, Plus } from "lucide-react"
+import { EmptyState } from "@/components/primitives/empty-state"
+import { Button, buttonVariants } from "@/components/ui/button"
 
-export function EmptyStateCard({ onNewProgram }: { onNewProgram: () => void }) {
+interface EmptyStateCardProps {
+  hasDecks: boolean
+  onNewProgram: () => void
+}
+
+export function EmptyStateCard({
+  hasDecks,
+  onNewProgram,
+}: EmptyStateCardProps): React.JSX.Element {
   return (
-    <div className="border-2 border-dashed border-outline-variant/40 rounded-xl p-10 flex flex-col items-center justify-center text-center gap-4">
-      <div className="bg-surface-container-low rounded-full p-3 flex items-center justify-center">
-        <PlusCircle className="h-8 w-8 text-primary" />
-      </div>
-      <div>
-        <p className="text-base font-semibold text-on-surface mb-1">Start a new program</p>
-        <p className="text-sm text-on-surface-variant max-w-sm leading-relaxed">
-          Connect a deck to start scheduling reviews. We&apos;ll automatically create a Google
-          Calendar schedule based on your mastery levels.
-        </p>
-      </div>
-      <button
-        onClick={onNewProgram}
-        className="flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all cursor-pointer"
-      >
-        <Plus className="h-4 w-4" />
-        New Program
-      </button>
-    </div>
+    <EmptyState
+      icon={<Bell className="size-9 text-primary" />}
+      title="No reminder programs"
+      body={
+        hasDecks
+          ? "Connect a deck to start scheduling automated reviews. NeuroCards groups cards into FSRS memory stability buckets and delivers a daily morning digest."
+          : "Create a deck first, then connect it to an automated review schedule and daily morning digest."
+      }
+      action={
+        hasDecks ? (
+          <Button onClick={onNewProgram} size="lg">
+            <Plus className="size-4" />
+            New program
+          </Button>
+        ) : (
+          <Link href="/decks" className={buttonVariants({ size: "lg" })}>
+            <Plus className="size-4" />
+            Create a deck
+          </Link>
+        )
+      }
+    />
   )
 }
