@@ -6,6 +6,10 @@ import type { FsrsRating } from "@/lib/fsrs/types"
 import { RATING_BY_HOTKEY } from "@/components/study/ratings"
 import { isTextEntry } from "@/lib/is-text-entry"
 
+function isInteractive(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.closest("button, a[href], [role='button']") !== null
+}
+
 interface Options {
   revealed: boolean
   /** Suspends every shortcut — the exam chat and the card editor own the keyboard. */
@@ -27,9 +31,14 @@ export function useStudyHotkeys({ revealed, disabled, onToggleReveal, onRate }: 
 
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.repeat) return
       if (isTextEntry(e.target)) return
 
       if (e.key === " " || e.key === "Enter") {
+        // A focused button or link owns Space/Enter. Intercepting here swallowed
+        // the native click on a Tab-focused rating button and toggled the answer
+        // closed instead, so the same question came back and no review was sent.
+        if (isInteractive(e.target)) return
         // Space scrolls the page by default.
         e.preventDefault()
         onToggleReveal()
