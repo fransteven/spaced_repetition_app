@@ -30,6 +30,8 @@ VOICE_WS_URL=ws://localhost:8000/v1/voice/ws
 
 Set `NEXT_INTERNAL_BASE_URL=http://localhost:3000`, the same `VOICE_SERVICE_TOKEN`, `GEMINI_API_KEY`, and `ALLOWED_ORIGIN=http://localhost:3000` in the FastAPI service. For production, use an `https://` internal base URL and a `wss://` voice URL. Run `npx drizzle-kit generate` after schema changes, then `npx drizzle-kit migrate` against the intended database. The voice migration creates `voice_exam_attempts`; the Inngest daily job clears transcripts after 30 days. The separate service has its own README and Dockerfile for Railway.
 
+For local use, start the FastAPI service in its own terminal with `.venv/bin/uvicorn app.main:app --env-file .env --port 8000`, then start this app with `npm run dev`. Restart Next.js after adding `VOICE_WS_URL` or `VOICE_SERVICE_TOKEN`. Confirm the gateway at `http://localhost:8000/health`. A Vercel deployment requires the same Next.js variables in Vercel and a deployed FastAPI gateway with a public `wss://` URL; the local `ws://localhost:8000` value works only on your own machine.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
