@@ -26,7 +26,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     // userId always from session — never from body (AGENTS.md §10.8)
-    const result = await runExamTurn(session.user.id, parsed.data.card_id, parsed.data.messages);
+    const result = await runExamTurn(session.user.id, parsed.data.card_id, parsed.data.messages, parsed.data.exam_token);
     return NextResponse.json({ data: result, error: null });
   } catch (error) {
     if (error instanceof ServiceError) {

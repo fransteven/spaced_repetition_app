@@ -28,6 +28,7 @@ interface ExamTurnResponse {
   message: string
   done:    boolean
   verdict: ExamVerdict | null
+  examToken: string
 }
 
 const VERDICT_STYLE: Record<FsrsRating, { label: string; className: string }> = {
@@ -54,6 +55,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const startedRef = useRef(false)
   const lastAttemptRef = useRef<ExamMessage[]>([])
+  const examTokenRef = useRef<string | null>(null)
 
   const requestTurn = async (nextMessages: ExamMessage[]) => {
     lastAttemptRef.current = nextMessages
@@ -63,7 +65,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
       const res  = await fetch("/api/study/exam", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ card_id: cardId, messages: nextMessages }),
+        body:    JSON.stringify({ card_id: cardId, messages: nextMessages, exam_token: examTokenRef.current ?? undefined }),
       })
       const json = await res.json()
 
@@ -73,6 +75,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
       }
 
       const result = json.data as ExamTurnResponse
+      examTokenRef.current = result.examToken
       setMessages([...nextMessages, { role: "assistant", content: result.message }])
       if (result.done && result.verdict) {
         setDone(true)
@@ -98,6 +101,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
       setError(null)
       setVerdict(null)
       setDone(false)
+      examTokenRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])

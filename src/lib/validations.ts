@@ -54,6 +54,15 @@ export const SubmitReviewSchema = z.object({
   rating:  z.enum(['again', 'hard', 'good', 'easy']),
 });
 
+export const StartVoiceAttemptSchema = z.object({
+  card_id: z.string().uuid(),
+});
+
+export const FinishVoiceAttemptSchema = z.object({
+  transcript: z.string().trim().min(1).max(6000),
+  turns: z.number().int().min(1).max(3),
+});
+
 export interface CardData {
   id: string;
   front: string;
@@ -71,6 +80,7 @@ export const ExamMessageSchema = z.object({
 export const SubmitExamTurnSchema = z.object({
   card_id:  z.string().uuid(),
   messages: z.array(ExamMessageSchema).max(40),
+  exam_token: z.string().max(1000).optional(),
 });
 
 export const CreateSkillSchema = z.object({

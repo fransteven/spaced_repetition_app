@@ -1,12 +1,15 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { GoogleGenAI, Type, type GenerateContentResponse } from '@google/genai';
 import { db } from '@/lib/db';
-import { cards, decks } from '@/lib/db/schema';
+import { cards, cardSchedules, decks } from '@/lib/db/schema';
 import { ServiceError } from '@/lib/services/service-error';
 import { assertCardOwnership } from '@/lib/services/card-service';
 import { listSkills } from '@/lib/services/skill-service';
 import type { FsrsRating } from '@/lib/fsrs/types';
+import { FSRS_RATING_RUBRIC } from '@/lib/exam/rubric';
+import { signExamToken, verifyExamToken } from '@/lib/exam/exam-token';
+import { applyReview } from '@/lib/services/study-service';
 
 // Tried in order. flash is faster/cheaper; pro is the fallback when flash
 // is overloaded (503 UNAVAILABLE) or otherwise unavailable. Gemini-only —
@@ -94,6 +97,7 @@ export interface ExamTurnResult {
   message: string;
   done:    boolean;
   verdict: ExamVerdict | null;
+  examToken: string;
 }
 
 // Validates the model's structured JSON output before we trust it.
@@ -165,6 +169,7 @@ function buildSystemInstruction(
     'Turn 1: infer the best-fit skill and ask ONE short exercise that requires the student to actively',
     'use or produce the knowledge from the card (per that skill\'s rubric). Set done=false, verdict=null.',
     'Turn 2 (after the student answers): grade the answer against the card\'s answer and the skill rubric.',
+    FSRS_RATING_RUBRIC,
     'Set done=true and fill verdict with an honest rating — do not inflate the rating to be nice.',
     'Never reveal the literal card answer text before the student has attempted the exercise.',
     'Keep every message concise (2-4 sentences).',
@@ -175,22 +180,46 @@ export async function runExamTurn(
   userId:  string,
   cardId:  string,
   history: ExamMessage[],
+  examToken?: string,
 ): Promise<ExamTurnResult> {
   await assertCardOwnership(userId, cardId);
+
+  if (history.length > 0 && !examToken) {
+    throw new ServiceError('FORBIDDEN', 'Exam token required');
+  }
+  const prior = examToken ? verifyExamToken(examToken, userId, cardId) : null;
 
   const [row] = await db
     .select({
       front:   cards.front,
       back:    cards.back,
       subject: decks.subject,
+      updatedAt: cards.updated_at,
+      reps: cardSchedules.reps,
+      lastReview: cardSchedules.last_review,
     })
     .from(cards)
     .innerJoin(decks, eq(decks.id, cards.deck_id))
+    .innerJoin(cardSchedules, and(eq(cardSchedules.card_id, cards.id), eq(cardSchedules.user_id, userId)))
     .where(eq(cards.id, cardId));
 
   if (!row) {
     throw new ServiceError('NOT_FOUND', 'Card not found');
   }
+
+  if (prior && (
+    prior.cardUpdatedAt !== row.updatedAt.toISOString() ||
+    prior.reps !== row.reps || prior.lastReview !== (row.lastReview?.toISOString() ?? null)
+  )) {
+    throw new ServiceError('FORBIDDEN', 'Card changed or was already reviewed');
+  }
+
+  const token = examToken ?? signExamToken({
+    userId, cardId, reps: row.reps,
+    lastReview: row.lastReview?.toISOString() ?? null,
+    cardUpdatedAt: row.updatedAt.toISOString(),
+    expiresAt: Date.now() + 10 * 60_000,
+  });
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -220,9 +249,28 @@ export async function runExamTurn(
 
   const parsed = ExamModelOutputSchema.parse(JSON.parse(raw));
 
+  if (parsed.done) {
+    const verdict = parsed.verdict;
+    if (!verdict || !prior || !history.some((message) => message.role === 'user')) {
+      throw new ServiceError('UNAVAILABLE', 'Exam returned an invalid final verdict');
+    }
+    await db.transaction(async (tx) => {
+      const [currentCard] = await tx.select({ updatedAt: cards.updated_at }).from(cards)
+        .where(eq(cards.id, cardId)).for('update');
+      if (!currentCard || currentCard.updatedAt.toISOString() !== prior.cardUpdatedAt) {
+        throw new ServiceError('FORBIDDEN', 'Card changed during the exam');
+      }
+      await applyReview(tx, userId, cardId, verdict.rating, {
+        reps: prior.reps,
+        lastReview: prior.lastReview ? new Date(prior.lastReview) : null,
+      });
+    });
+  }
+
   return {
     message: parsed.message,
     done:    parsed.done,
     verdict: parsed.verdict ?? null,
+    examToken: token,
   };
 }

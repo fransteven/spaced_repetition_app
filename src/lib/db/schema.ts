@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index } from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from '@auth/core/adapters';
 
 export const cardStateEnum = pgEnum('card_state', ['new', 'learning', 'review', 'relearning']);
@@ -79,6 +79,35 @@ export const reviewLogs = pgTable('review_logs', {
   elapsed_days:   integer('elapsed_days').notNull(),
   reviewed_at:    timestamp('reviewed_at').defaultNow().notNull(),
 });
+
+// A voice attempt is the idempotency boundary for an automatic review.
+// Audio is never stored; transcripts are cleared after 30 days.
+export const voiceExamAttempts = pgTable('voice_exam_attempts', {
+  id:                   uuid('id').defaultRandom().primaryKey(),
+  user_id:              uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  card_id:              uuid('card_id').references(() => cards.id, { onDelete: 'cascade' }).notNull(),
+  card_updated_at:      timestamp('card_updated_at').notNull(),
+  schedule_reps:        integer('schedule_reps').notNull(),
+  schedule_last_review: timestamp('schedule_last_review'),
+  ticket_hash:          text('ticket_hash').unique(),
+  ticket_expires_at:    timestamp('ticket_expires_at').notNull(),
+  expires_at:           timestamp('expires_at').notNull(),
+  status:               text('status').notNull().default('created'),
+  transcript:           text('transcript'),
+  rating:               ratingEnum('rating'),
+  feedback:             text('feedback'),
+  skill_used:           text('skill_used'),
+  review_log_id:        uuid('review_log_id').references(() => reviewLogs.id).unique(),
+  scheduled_days:       integer('scheduled_days'),
+  due_date:             timestamp('due_date'),
+  live_model:           text('live_model').notNull().default('gemini-3.8-live'),
+  grading_model:        text('grading_model').notNull().default('gemini-3.8-flash'),
+  created_at:           timestamp('created_at').defaultNow().notNull(),
+  completed_at:         timestamp('completed_at'),
+}, (table) => [
+  index('voice_attempts_user_status_idx').on(table.user_id, table.status),
+  index('voice_attempts_created_idx').on(table.created_at),
+]);
 
 // User-defined exam skills — used by the LLM examiner to focus study
 // exercises on a specific topic (e.g. "English vocabulary", "Anatomy").

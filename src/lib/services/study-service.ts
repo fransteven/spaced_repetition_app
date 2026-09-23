@@ -130,43 +130,64 @@ export async function submitReview(
   userId: string,
   cardId: string,
   rating: FsrsRating,
-): Promise<{ scheduled_days: number }> {
+): Promise<{ scheduled_days: number; due_date: Date }> {
   await assertCardOwnership(userId, cardId);
 
-  const [schedule] = await db
+  const result = await db.transaction((tx) => applyReview(tx, userId, cardId, rating));
+  return { scheduled_days: result.scheduled_days, due_date: result.due_date };
+}
+
+type ReviewTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function applyReview(
+  tx: ReviewTransaction,
+  userId: string,
+  cardId: string,
+  rating: FsrsRating,
+  expected?: { reps: number; lastReview: Date | null },
+): Promise<{ scheduled_days: number; due_date: Date; review_log_id: string }> {
+  const [schedule] = await tx
     .select()
     .from(cardSchedules)
-    .where(and(eq(cardSchedules.card_id, cardId), eq(cardSchedules.user_id, userId)));
+    .where(and(eq(cardSchedules.card_id, cardId), eq(cardSchedules.user_id, userId)))
+    .for('update');
 
   if (!schedule) throw new ServiceError('NOT_FOUND', 'Schedule not found');
+  if (expected && (
+    schedule.reps !== expected.reps ||
+    schedule.last_review?.getTime() !== expected.lastReview?.getTime()
+  )) {
+    throw new ServiceError('FORBIDDEN', 'Card was reviewed while the exam was in progress');
+  }
 
-  const now    = new Date();
-  const result = review(schedule, rating, now);
+  const result = review(schedule, rating, new Date());
 
-  await db.transaction(async tx => {
-    await tx
-      .update(cardSchedules)
-      .set({
-        stability:      result.stability,
-        difficulty:     result.difficulty,
-        state:          result.state,
-        reps:           result.reps,
-        lapses:         result.lapses,
-        scheduled_days: result.scheduled_days,
-        elapsed_days:   result.elapsed_days,
-        due_date:       result.due_date,
-        last_review:    result.last_review,
-      })
-      .where(and(eq(cardSchedules.card_id, cardId), eq(cardSchedules.user_id, userId)));
-
-    await tx.insert(reviewLogs).values({
-      card_id:        cardId,
-      user_id:        userId,
-      rating,
+  await tx
+    .update(cardSchedules)
+    .set({
+      stability:      result.stability,
+      difficulty:     result.difficulty,
+      state:          result.state,
+      reps:           result.reps,
+      lapses:         result.lapses,
       scheduled_days: result.scheduled_days,
       elapsed_days:   result.elapsed_days,
-    });
-  });
+      due_date:       result.due_date,
+      last_review:    result.last_review,
+    })
+    .where(eq(cardSchedules.id, schedule.id));
 
-  return { scheduled_days: result.scheduled_days };
+  const [log] = await tx.insert(reviewLogs).values({
+    card_id: cardId,
+    user_id: userId,
+    rating,
+    scheduled_days: result.scheduled_days,
+    elapsed_days: result.elapsed_days,
+  }).returning({ id: reviewLogs.id });
+
+  return {
+    scheduled_days: result.scheduled_days,
+    due_date: result.due_date,
+    review_log_id: log.id,
+  };
 }

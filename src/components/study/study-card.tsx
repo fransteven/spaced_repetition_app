@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronUp, GraduationCap, Pencil } from "lucide-react"
+import { ChevronUp, GraduationCap, Mic, Pencil } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { FsrsRating } from "@/lib/fsrs/types"
@@ -32,6 +32,7 @@ interface Props {
   isRating: boolean
   onEdit: () => void
   onExam: () => void
+  onVoiceExam: () => void
 }
 
 function stateTone(card: StudyCardItem): LearningStateBucket {
@@ -55,6 +56,7 @@ export function StudyCard({
   isRating,
   onEdit,
   onExam,
+  onVoiceExam,
 }: Props) {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const images = [card.image_url_1, card.image_url_2].filter(Boolean) as string[]
@@ -151,7 +153,7 @@ export function StudyCard({
           </div>
         </Surface>
 
-        <div className="flex flex-wrap items-center justify-between gap-4 px-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 px-4">
           <div className="flex flex-wrap gap-1">
             <Button variant="ghost" size="sm" onClick={onEdit} className="cursor-pointer">
               <Pencil className="size-4" />
@@ -165,12 +167,20 @@ export function StudyCard({
             )}
           </div>
 
-          {revealed && (
-            <Button variant="ghost" size="sm" className="text-primary cursor-pointer" onClick={onExam}>
-              <GraduationCap className="size-4" />
-              Quiz me with AI
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-1">
+            {!revealed && (
+              <Button variant="ghost" size="sm" className="text-primary cursor-pointer" onClick={onVoiceExam}>
+                <Mic className="size-4" />
+                Oral exam
+              </Button>
+            )}
+            {revealed && (
+              <Button variant="ghost" size="sm" className="text-primary cursor-pointer" onClick={onExam}>
+                <GraduationCap className="size-4" />
+                Quiz me with AI
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import {
   sendDueDigests,
   sendDigestForUser,
 } from '@/lib/services/reminder-digest-service';
+import { purgeOldVoiceTranscripts } from '@/lib/services/voice-attempt-service';
 
 // Daily cron at 8:00 AM Colombia time (America/Bogota, UTC-5 year round).
 export const dailyStudyDigest = inngest.createFunction(
@@ -35,5 +36,17 @@ export const sendDigestNow = inngest.createFunction(
     return step.run('send-digest', () =>
       sendDigestForUser(userId, new Date(), { force: true })
     );
+  }
+);
+
+export const purgeVoiceTranscripts = inngest.createFunction(
+  {
+    id: 'purge-voice-transcripts',
+    name: 'Clear old voice exam transcripts',
+    triggers: [{ cron: 'TZ=America/Bogota 0 3 * * *' }],
+  },
+  async ({ step }) => {
+    await step.run('clear-transcripts', () => purgeOldVoiceTranscripts(new Date()));
+    return { cleared: true };
   }
 );

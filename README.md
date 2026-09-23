@@ -16,6 +16,20 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Oral exams
+
+The study page offers a one-card oral exam before revealing the answer. Gemini 3.8 Live runs the voice conversation through the separate `srs-llm-api` FastAPI service. This Next.js app grades the final transcript with Gemini Flash and commits the rating through the existing FSRS service.
+
+Set these server-side values in `.env.local` or your deployment environment:
+
+```text
+GEMINI_API_KEY=...
+VOICE_SERVICE_TOKEN=...  # same random value in both services
+VOICE_WS_URL=ws://localhost:8000/v1/voice/ws
+```
+
+Set `NEXT_INTERNAL_BASE_URL=http://localhost:3000`, the same `VOICE_SERVICE_TOKEN`, `GEMINI_API_KEY`, and `ALLOWED_ORIGIN=http://localhost:3000` in the FastAPI service. For production, use an `https://` internal base URL and a `wss://` voice URL. Run `npx drizzle-kit generate` after schema changes, then `npx drizzle-kit migrate` against the intended database. The voice migration creates `voice_exam_attempts`; the Inngest daily job clears transcripts after 30 days. The separate service has its own README and Dockerfile for Railway.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

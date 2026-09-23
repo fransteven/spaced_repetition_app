@@ -13,7 +13,7 @@ A web-based **spaced repetition flashcard app** (Anki-style). Users create decks
 | Repo | Purpose |
 |---|---|
 | `srs-app/` | Next.js 16 · App Router · API Routes · FSRS engine · reminder scheduler |
-| `srs-llm-api/` | FastAPI · future LLM microservice (card suggestions, explanations) |
+| `srs-llm-api/` | Separate FastAPI repo · Gemini Live voice gateway |
 
 ---
 
@@ -25,7 +25,7 @@ Database : NeonDB (PostgreSQL serverless) · Drizzle ORM
 Auth     : NextAuth v5 (next-auth@beta) · @auth/drizzle-adapter
 Images   : Cloudinary (server-only)
 Reminders: Nodemailer (SMTP) · Inngest (cron)
-LLM layer: FastAPI + Anthropic SDK (Phase 6 only — do not build until Phase 1–5 done)
+LLM layer: Gemini API · FastAPI voice gateway in a separate repo
 Deploy   : Vercel (Next.js) · Railway or Render (FastAPI)
 ```
 
@@ -425,6 +425,9 @@ SMTP_PASS=
 SMTP_FROM=                        # optional, falls back to SMTP_USER
 INNGEST_DEV=1                     # local dev; use INNGEST_SIGNING_KEY in prod
 LLM_API_URL=http://localhost:8000  # FastAPI (Phase 6)
+GEMINI_API_KEY=                     # server only; text and voice grading
+VOICE_WS_URL=ws://localhost:8000/v1/voice/ws
+VOICE_SERVICE_TOKEN=                # shared only between Next.js and FastAPI
 ```
 
 ---
@@ -793,7 +796,7 @@ export function formatCurrency(amount: number, currency = 'USD', locale = 'en-US
 | **3 — Study Session** | FSRS engine (`src/lib/fsrs/`) · Study session page · `POST /api/study/review` |
 | **4 — Dashboard** | Study stats · card due forecast · streak counter · activity heatmap |
 | **5 — Reminders** | `src/lib/scheduler.ts` · Nodemailer SMTP + Inngest cron digest |
-| **6 — FastAPI LLM** | Only start after Phases 1–5 are fully working and deployed |
+| **6 — Gemini voice gateway** | FastAPI Gemini Live service in a separate repo; Next.js owns grading and FSRS |
 
 ---
 

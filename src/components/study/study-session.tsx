@@ -9,6 +9,7 @@ import type { FsrsRating } from "@/lib/fsrs/types"
 import type { CardData } from "@/lib/validations"
 import { CardEditor } from "@/components/cards/CardEditor"
 import { ExamDialog } from "@/components/study/exam-dialog"
+import { VoiceExamDialog } from "@/components/study/voice-exam-dialog"
 import { StudyCard } from "@/components/study/study-card"
 import { StudyOutcome } from "@/components/study/study-outcome"
 import { unwrapError } from "@/lib/api-envelope"
@@ -40,6 +41,7 @@ export function StudySession({
   const [editorOpen, setEditorOpen] = useState(false)
   const [editCard, setEditCard] = useState<CardData | null>(null)
   const [examOpen, setExamOpen] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   // Progress denominators are frozen at mount. `again` cards get re-appended to
   // `cards`, so a denominator of `cards.length` grows mid-session and makes the
@@ -99,55 +101,47 @@ export function StudySession({
     )
   }
 
-  const handleRate = useCallback(
-    async (rating: FsrsRating) => {
-      if (!currentCard || isPending) return
-      setRateError(null)
+  const recordLocalReview = useCallback((rating: FsrsRating) => {
+    if (!currentCard) return
+    setCounts((prev) => ({ ...prev, [rating]: prev[rating] + 1 }))
+    setElapsedMs(Date.now() - (startedAt.current ?? Date.now()))
+    reviewedIds.current.add(currentCard.card_id)
+    setReviewedCount(reviewedIds.current.size)
+    const next = (reviewedIds.current.size / Math.max(1, sessionTotal)) * 100
+    setProgressPct((prev) => Math.min(100, Math.max(prev, next)))
+    if (rating === "again") setCards((prev) => [...prev, { ...currentCard }])
+    setCurrentIdx((prev) => prev + 1)
+    setRevealed(false)
+  }, [currentCard, sessionTotal])
 
-      startTransition(async () => {
-        try {
-          const res = await fetch("/api/study/review", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ card_id: currentCard.card_id, rating }),
-          })
-          const json: unknown = await res.json()
-
-          if (!res.ok) {
-            setRateError(unwrapError(json, "Failed to submit review"))
-            return
-          }
-
-          setCounts((prev) => ({ ...prev, [rating]: prev[rating] + 1 }))
-          setElapsedMs(Date.now() - (startedAt.current ?? Date.now()))
-
-          reviewedIds.current.add(currentCard.card_id)
-          setReviewedCount(reviewedIds.current.size)
-          const next = (reviewedIds.current.size / Math.max(1, sessionTotal)) * 100
-          // Monotonic by construction — the bar can only ever move forward.
-          setProgressPct((prev) => Math.min(100, Math.max(prev, next)))
-
-          if (rating === "again") {
-            // Re-queue for a second pass in this same session.
-            setCards((prev) => [...prev, { ...currentCard }])
-          }
-
-          setCurrentIdx((prev) => prev + 1)
-          setRevealed(false)
-        } catch (err) {
-          console.error("[StudySession rating]", err)
-          setRateError("An unexpected error occurred.")
+  const handleRate = useCallback(async (rating: FsrsRating) => {
+    if (!currentCard || isPending) return
+    setRateError(null)
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/study/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ card_id: currentCard.card_id, rating }),
+        })
+        const json: unknown = await res.json()
+        if (!res.ok) {
+          setRateError(unwrapError(json, "Failed to submit review"))
+          return
         }
-      })
-    },
-    [currentCard, isPending, sessionTotal]
-  )
+        recordLocalReview(rating)
+      } catch (err) {
+        console.error("[StudySession rating]", err)
+        setRateError("An unexpected error occurred.")
+      }
+    })
+  }, [currentCard, isPending, recordLocalReview])
 
   const toggleReveal = useCallback(() => setRevealed((prev) => !prev), [])
 
   useStudyHotkeys({
     revealed,
-    disabled: isPending || examOpen || editorOpen || done,
+    disabled: isPending || examOpen || voiceOpen || editorOpen || done,
     onToggleReveal: toggleReveal,
     onRate: handleRate,
   })
@@ -220,6 +214,7 @@ export function StudySession({
           isRating={isPending}
           onEdit={handleEditClick}
           onExam={() => setExamOpen(true)}
+          onVoiceExam={() => setVoiceOpen(true)}
         />
       </main>
 
@@ -251,7 +246,15 @@ export function StudySession({
           open={examOpen}
           onOpenChange={setExamOpen}
           cardId={currentCard.card_id}
-          onVerdict={handleRate}
+          onVerdict={recordLocalReview}
+        />
+      )}
+      {currentCard && (
+        <VoiceExamDialog
+          open={voiceOpen}
+          onOpenChange={setVoiceOpen}
+          cardId={currentCard.card_id}
+          onReviewed={recordLocalReview}
         />
       )}
     </div>
