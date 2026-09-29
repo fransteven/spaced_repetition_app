@@ -180,6 +180,32 @@ Todas las animaciones están implementadas en CSS puro y respetan de manera estr
 
 ---
 
+## 10.1 Lector (EPUB)
+
+El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y cero animaciones continuas mientras se lee.
+
+### Tema del lector
+- Mientras el lector está montado, `<html>` lleva `data-reader-theme` (`sepia` · `light` · `dark`; `auto` no lo pone). Los bloques de `globals.css` re-apuntan los tokens base, así primitivos y sheets en portal siguen el tema sin clases `dark:`.
+- **Sepia (default, estilo Apple Books):** `--reader-sepia-surface #f1e3ca`, `--reader-sepia-surface-container #fef3e2`, `--reader-sepia-on-surface #35271a`, `--reader-sepia-on-surface-variant #6e6350` (≥ 4.5:1; el `#847861` de Apple Books no cumple).
+- El contenido del libro vive en un iframe: `src/components/reader/reader-theme.ts` lee los tokens resueltos y los inyecta como CSS. Nunca hex en ese archivo.
+
+### Resaltados
+- Tokens `--highlight-{yellow,green,blue,pink}` (utilidades `bg-highlight-*`). Son color elegido por el usuario para organizar, **no** estado FSRS.
+- En claro/sepia se pintan con `mix-blend-mode: multiply` (el texto no se lava); en oscuro tonos medios con blend normal. `--highlight-opacity` controla la intensidad.
+
+### Tipografía del libro
+- `book` (default): `"Iowan Old Style", "Charter", "Literata", Georgia, serif` (`font-reader`). Literata está self-hosted en `public/fonts/literata/` (OFL). Fraunces **no** se usa para cuerpo de lectura.
+- `sans`: Inter · `original`: fuente de la editorial.
+- Tamaño base 125 % × escala (0.8–1.6), interlineado 1.55, alineación izquierda con `hyphens: auto` (justificado opcional), doble columna ≥ 1000 px.
+
+### Chrome
+- Barra superior: grupos de pills `rounded-full bg-card shadow-ambient` (izq.: volver, índice, notas · der.: ajustes), título centrado en `text-body-sm font-semibold`.
+- Pie: "N of M" en `text-body-sm tabular text-on-surface-variant` + `MasteryThread` corto.
+- Tap al centro oculta/muestra el chrome (conserva el espacio para no re-paginar). Tap en bordes o swipe cambian de página.
+- Toolbar de selección: `rounded-2xl bg-popover shadow-ambient-lg animate-pop-in`.
+
+---
+
 ## 11. Ejemplos Do / Don't (del código real)
 
 ### 1. Cards y Sombras

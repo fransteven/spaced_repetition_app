@@ -199,6 +199,14 @@ export const reminderDeliveries = pgTable('reminder_deliveries', {
 });
 ```
 
+### 4.2.1 Reader (EPUB) tables
+
+Defined in `src/lib/db/schema.ts` (source of truth): `books` (file in private
+Vercel Blob, reading position as CFI + progress), `book_sections` (plain-text
+version per spine item — input for RAG), `book_annotations` (highlight + optional
+note, anchored by `cfi_range`) and `reader_preferences` (one row per user).
+Plan: `docs/plans/epub-reader-fase-1.md`.
+
 ### 4.3 Migration commands
 
 ```bash
@@ -307,6 +315,15 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `GET /api/reminders` | — | User's reminder programs |
 | `POST /api/reminders` | `{ name, deck_id, enable_email }` | Seeds one reminder_schedules row per bucket |
 | `DELETE /api/reminders/[id]` | — | Cascades to reminder_schedules |
+| `POST /api/books/upload` | Vercel Blob `handleUpload` body | Issues a client-upload token (EPUB, ≤ 100 MB, own folder, ≤ 50 books) |
+| `POST /api/books` | `{ pathname, filename }` | Confirms the upload, creates the book, emits `app/book.uploaded` |
+| `GET /api/books` | — | User's library |
+| `PATCH /api/books/[id]` | `{ title?, author? }` | Verify ownership |
+| `DELETE /api/books/[id]` | — | Deletes blobs, then the row (cascades) |
+| `GET /api/books/[id]/file` · `/cover` | — | Streams the private blob after an ownership check |
+
+Reader mutations (progress, locations cache, annotations, preferences) are Server
+Actions in `src/app/actions/reader-actions.ts`.
 
 ### 6.3 Study session card ordering (strict — do not reorder)
 
@@ -428,6 +445,7 @@ LLM_API_URL=http://localhost:8000  # FastAPI (Phase 6)
 GEMINI_API_KEY=                     # server only; text and voice grading
 VOICE_WS_URL=ws://localhost:8000/v1/voice/ws
 VOICE_SERVICE_TOKEN=                # shared only between Next.js and FastAPI
+BLOB_READ_WRITE_TOKEN=              # Vercel Blob (private EPUBs + covers)
 ```
 
 ---

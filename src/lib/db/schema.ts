@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from '@auth/core/adapters';
 
 export const cardStateEnum = pgEnum('card_state', ['new', 'learning', 'review', 'relearning']);
@@ -152,4 +152,73 @@ export const reminderDeliveries = pgTable('reminder_deliveries', {
   status:      text('status').notNull(),          // 'sent' | 'failed' | 'empty'
   error:       text('error'),
   created_at:  timestamp('created_at').defaultNow().notNull(),
+});
+
+// ── Reader (EPUB) ────────────────────────────────────────────────────────────
+
+export const bookStatusEnum     = pgEnum('book_status',     ['processing', 'ready', 'failed']);
+export const highlightColorEnum = pgEnum('highlight_color', ['yellow', 'green', 'blue', 'pink']);
+export const readerThemeEnum    = pgEnum('reader_theme',    ['auto', 'light', 'dark', 'sepia']);
+export const readerFontEnum     = pgEnum('reader_font',     ['book', 'sans', 'original']);
+
+// One uploaded EPUB. The original file lives in Vercel Blob (private);
+// its plain-text version lives in book_sections.
+export const books = pgTable('books', {
+  id:             uuid('id').defaultRandom().primaryKey(),
+  user_id:        uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  title:          text('title').notNull(),
+  author:         text('author'),
+  language:       text('language'),                 // dc:language (BCP-47)
+  blob_pathname:  text('blob_pathname').notNull().unique(),
+  cover_pathname: text('cover_pathname'),
+  file_size:      integer('file_size').notNull(),
+  status:         bookStatusEnum('status').notNull().default('processing'),
+  error:          text('error'),                    // user-safe message only
+  locations_json: text('locations_json'),           // cached epub.js locations
+  last_cfi:       text('last_cfi'),
+  progress:       real('progress').notNull().default(0), // 0..1
+  last_read_at:   timestamp('last_read_at'),
+  created_at:     timestamp('created_at').defaultNow().notNull(),
+  updated_at:     timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('books_user_idx').on(table.user_id, table.last_read_at),
+]);
+
+// Plain-text version of a book — one row per spine item.
+export const bookSections = pgTable('book_sections', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  book_id:     uuid('book_id').references(() => books.id, { onDelete: 'cascade' }).notNull(),
+  spine_index: integer('spine_index').notNull(),
+  href:        text('href').notNull(),
+  title:       text('title'),
+  text:        text('text').notNull(),
+}, (table) => [
+  uniqueIndex('book_sections_book_spine_idx').on(table.book_id, table.spine_index),
+]);
+
+// A highlight with an optional note. A note always hangs off a text range.
+export const bookAnnotations = pgTable('book_annotations', {
+  id:            uuid('id').defaultRandom().primaryKey(),
+  book_id:       uuid('book_id').references(() => books.id, { onDelete: 'cascade' }).notNull(),
+  user_id:       uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  cfi_range:     text('cfi_range').notNull(),        // EPUB CFI — stable anchor
+  quote:         text('quote').notNull(),
+  chapter_label: text('chapter_label'),
+  color:         highlightColorEnum('color').notNull().default('yellow'),
+  note:          text('note'),
+  created_at:    timestamp('created_at').defaultNow().notNull(),
+  updated_at:    timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('book_annotations_book_idx').on(table.book_id),
+]);
+
+// Per-user reading preferences, synced across devices.
+export const readerPreferences = pgTable('reader_preferences', {
+  user_id:     uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).primaryKey(),
+  font_scale:  real('font_scale').notNull().default(1),       // 0.8 – 1.6
+  font_family: readerFontEnum('font_family').notNull().default('book'),
+  line_height: real('line_height').notNull().default(1.55),
+  justify:     boolean('justify').notNull().default(false),
+  theme:       readerThemeEnum('theme').notNull().default('sepia'),
+  updated_at:  timestamp('updated_at').defaultNow().notNull(),
 });

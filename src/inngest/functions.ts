@@ -8,6 +8,7 @@ import {
   sendDigestForUser,
 } from '@/lib/services/reminder-digest-service';
 import { purgeOldVoiceTranscripts } from '@/lib/services/voice-attempt-service';
+import { markBookFailed, processBook } from '@/lib/services/book-service';
 
 // Daily cron at 8:00 AM Colombia time (America/Bogota, UTC-5 year round).
 export const dailyStudyDigest = inngest.createFunction(
@@ -48,5 +49,24 @@ export const purgeVoiceTranscripts = inngest.createFunction(
   async ({ step }) => {
     await step.run('clear-transcripts', () => purgeOldVoiceTranscripts(new Date()));
     return { cleared: true };
+  }
+);
+
+// Validates an uploaded EPUB and stores its metadata, cover and text version.
+export const processUploadedBook = inngest.createFunction(
+  {
+    id: 'book-process',
+    name: 'Process uploaded EPUB',
+    triggers: [{ event: 'app/book.uploaded' }],
+    retries: 2,
+    onFailure: async ({ event }) => {
+      const bookId = event.data.event.data.bookId as string;
+      await markBookFailed(bookId, 'We could not process this book. Try uploading it again.');
+    },
+  },
+  async ({ event, step }) => {
+    const bookId = event.data.bookId as string;
+    const status = await step.run('parse-and-store', () => processBook(bookId));
+    return { bookId, status };
   }
 );

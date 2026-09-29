@@ -199,6 +199,21 @@
   --color-streak-container: var(--streak-container);
   --color-on-streak-container: var(--on-streak-container);
 
+  /* Reader — highlight colours (user-chosen, not FSRS state) */
+  --color-highlight-yellow: var(--highlight-yellow);
+  --color-highlight-green: var(--highlight-green);
+  --color-highlight-blue: var(--highlight-blue);
+  --color-highlight-pink: var(--highlight-pink);
+
+  /* Reader — theme swatches (fixed, never re-pointed by data-reader-theme) */
+  --color-reader-sepia-surface: var(--reader-sepia-surface);
+  --color-reader-sepia-on-surface: var(--reader-sepia-on-surface);
+  --color-reader-swatch-light: var(--reader-swatch-light);
+  --color-reader-swatch-on-light: var(--reader-swatch-on-light);
+  --color-reader-swatch-dark: var(--reader-swatch-dark);
+  --color-reader-swatch-on-dark: var(--reader-swatch-on-dark);
+  --font-reader: "Iowan Old Style", "Charter", "Literata", Georgia, serif;
+
   /* Border radius */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -331,6 +346,24 @@
   /* Outline */
   --outline: #777587;
   --outline-variant: #c7c4d8;
+
+  /* Reader — highlights. Painted over the page with multiply blending. */
+  --highlight-yellow: #ffd84d;
+  --highlight-green:  #8fd694;
+  --highlight-blue:   #8cc3ff;
+  --highlight-pink:   #ff9ec4;
+  --highlight-blend:  multiply;
+  --highlight-opacity: 0.5;
+
+  /* Reader — sepia theme (Apple Books). Only consumed by [data-reader-theme="sepia"]. */
+  --reader-sepia-surface:            #f1e3ca;
+  --reader-sepia-surface-container:  #fef3e2;
+  --reader-sepia-on-surface:         #35271a;
+  --reader-sepia-on-surface-variant: #6e6350;
+  --reader-swatch-light:    #ffffff;
+  --reader-swatch-on-light: #191c1d;
+  --reader-swatch-dark:     #191c1d;
+  --reader-swatch-on-dark:  #f0f1f2;
 }
 
 .dark {
@@ -430,6 +463,129 @@
   --chart-3: var(--state-mastered);
   --chart-4: var(--state-struggling);
   --chart-5: var(--streak);
+
+  /* Reader — highlights on dark pages: mid tones, normal blending. */
+  --highlight-yellow: #d9b440;
+  --highlight-green:  #5fae6a;
+  --highlight-blue:   #5a9be0;
+  --highlight-pink:   #d9709c;
+  --highlight-blend:  normal;
+  --highlight-opacity: 0.38;
+}
+
+/* ── Reader themes ─────────────────────────────────────────────────────────
+   While /read is mounted, <html> carries data-reader-theme (removed on
+   unmount). These blocks re-point the base tokens so primitives and portalled
+   sheets/menus follow the reader theme without any dark: classes. */
+[data-reader-theme="sepia"] {
+  --background: var(--reader-sepia-surface);
+  --foreground: var(--reader-sepia-on-surface);
+  --surface: var(--reader-sepia-surface);
+  --card: var(--reader-sepia-surface-container);
+  --card-foreground: var(--reader-sepia-on-surface);
+  --popover: var(--reader-sepia-surface-container);
+  --popover-foreground: var(--reader-sepia-on-surface);
+  --muted: #eadbbf;
+  --muted-foreground: var(--reader-sepia-on-surface-variant);
+  --accent: #eadbbf;
+  --accent-foreground: var(--reader-sepia-on-surface);
+  --surface-bright: var(--reader-sepia-surface-container);
+  --surface-container-lowest: var(--reader-sepia-surface-container);
+  --surface-container-low: var(--reader-sepia-surface-container);
+  --surface-container: #f6ead4;
+  --surface-container-high: #e6d5b8;
+  --surface-container-highest: #dcc9a8;
+  --on-surface: var(--reader-sepia-on-surface);
+  --on-surface-variant: var(--reader-sepia-on-surface-variant);
+  --border: #d9c7a7;
+  --input: #d9c7a7;
+  --outline-variant: #d9c7a7;
+  --shadow-tint: rgba(53, 39, 26, 0.06);
+  --shadow-tint-lg: rgba(53, 39, 26, 0.16);
+  --highlight-yellow: #ffd84d;
+  --highlight-green:  #8fd694;
+  --highlight-blue:   #8cc3ff;
+  --highlight-pink:   #ff9ec4;
+  --highlight-blend:  multiply;
+  --highlight-opacity: 0.5;
+}
+
+/* Forces the light palette in the reader while the app is dark. */
+.dark[data-reader-theme="light"] {
+  --background: #f8f9fa;
+  --foreground: #191c1d;
+  --surface: #f8f9fa;
+  --card: #ffffff;
+  --card-foreground: #191c1d;
+  --popover: #ffffff;
+  --popover-foreground: #191c1d;
+  --muted: #f3f4f5;
+  --muted-foreground: #464555;
+  --accent: #f3f4f5;
+  --accent-foreground: #191c1d;
+  --surface-bright: #ffffff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f3f4f5;
+  --surface-container: #edeeef;
+  --surface-container-high: #e7e8e9;
+  --surface-container-highest: #e1e3e4;
+  --on-surface: #191c1d;
+  --on-surface-variant: #464555;
+  --border: #c7c4d8;
+  --input: #c7c4d8;
+  --outline-variant: #c7c4d8;
+  --primary: #3525cd;
+  --primary-foreground: #ffffff;
+  --shadow-tint: rgba(25, 28, 29, 0.04);
+  --shadow-tint-lg: rgba(25, 28, 29, 0.12);
+  --highlight-yellow: #ffd84d;
+  --highlight-green:  #8fd694;
+  --highlight-blue:   #8cc3ff;
+  --highlight-pink:   #ff9ec4;
+  --highlight-blend:  multiply;
+  --highlight-opacity: 0.5;
+}
+
+/* epub.js draws highlights in an SVG pane over the page iframe; blending must
+   be set on the pane itself (an SVG attribute would be ignored). */
+.epub-view > svg {
+  mix-blend-mode: var(--highlight-blend);
+}
+
+/* Forces the dark palette in the reader while the app is light. */
+:not(.dark)[data-reader-theme="dark"] {
+  --background: #191c1d;
+  --foreground: #f0f1f2;
+  --surface: #191c1d;
+  --card: #2e3132;
+  --card-foreground: #f0f1f2;
+  --popover: #2e3132;
+  --popover-foreground: #f0f1f2;
+  --muted: #2e3132;
+  --muted-foreground: #c7c4d8;
+  --accent: #2e3132;
+  --accent-foreground: #f0f1f2;
+  --surface-bright: #383a3b;
+  --surface-container-lowest: #141617;
+  --surface-container-low: #1f2223;
+  --surface-container: #232627;
+  --surface-container-high: #2e3031;
+  --surface-container-highest: #383a3b;
+  --on-surface: #e1e3e4;
+  --on-surface-variant: #c7c4d8;
+  --border: #464555;
+  --input: #464555;
+  --outline-variant: #464555;
+  --primary: #c3c0ff;
+  --primary-foreground: #0f0069;
+  --shadow-tint: rgba(10, 11, 12, 0.45);
+  --shadow-tint-lg: rgba(10, 11, 12, 0.6);
+  --highlight-yellow: #d9b440;
+  --highlight-green:  #5fae6a;
+  --highlight-blue:   #5a9be0;
+  --highlight-pink:   #d9709c;
+  --highlight-blend:  normal;
+  --highlight-opacity: 0.38;
 }
 
 @layer base {

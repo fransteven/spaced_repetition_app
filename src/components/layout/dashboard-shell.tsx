@@ -24,9 +24,10 @@ export function DashboardShell({
   hasDueCards = false,
 }: DashboardShellProps): React.JSX.Element {
   const pathname = usePathname()
-  const isStudySession = pathname.startsWith("/study")
+  // Study sessions and the reader are immersive — no shell chrome.
+  const isImmersive = pathname.startsWith("/study") || pathname.startsWith("/read")
 
-  if (isStudySession) {
+  if (isImmersive) {
     return <>{children}</>
   }
 

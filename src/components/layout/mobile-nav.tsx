@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
-import { Bell, Layers, LayoutDashboard, Plus, Settings } from "lucide-react"
+import { Bell, BookOpen, Layers, LayoutDashboard, Plus, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { CreateDeckDialog } from "@/components/decks/CreateDeckDialog"
@@ -12,6 +12,7 @@ import { isNavActive } from "@/components/layout/nav-config"
 const TABS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: Layers, label: "Decks", href: "/decks" },
+  { icon: BookOpen, label: "Library", href: "/library" },
   { icon: Bell, label: "Reminders", href: "/reminders" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ] as const

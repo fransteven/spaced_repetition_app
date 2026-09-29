@@ -98,3 +98,58 @@ export const CreateReminderProgramSchema = z.object({
 export const ToggleReminderProgramSchema = z.object({
   active: z.boolean(),
 });
+
+// ── Reader (EPUB) ────────────────────────────────────────────────────────────
+
+export const ConfirmBookUploadSchema = z.object({
+  pathname: z.string().min(1).max(200),
+  filename: z.string().min(1).max(255),
+});
+
+export const UpdateBookSchema = z.object({
+  title:  z.string().trim().min(1).max(300).optional(),
+  author: z.string().trim().max(300).nullable().optional(),
+});
+
+export const ReadingProgressSchema = z.object({
+  book_id:  z.string().uuid(),
+  cfi:      z.string().min(1).max(2000),
+  progress: z.number().min(0).max(1),
+});
+
+export const BookLocationsSchema = z.object({
+  book_id:        z.string().uuid(),
+  locations_json: z.string().min(2).max(2_000_000),
+});
+
+export const HighlightColorSchema = z.enum(['yellow', 'green', 'blue', 'pink']);
+
+export const CreateAnnotationSchema = z.object({
+  book_id:       z.string().uuid(),
+  cfi_range:     z.string().min(1).max(2000),
+  quote:         z.string().min(1).max(5000),
+  chapter_label: z.string().max(300).nullable().optional(),
+  color:         HighlightColorSchema.default('yellow'),
+  note:          z.string().max(5000).nullable().optional(),
+});
+
+export const UpdateAnnotationSchema = z.object({
+  color: HighlightColorSchema.optional(),
+  note:  z.string().max(5000).nullable().optional(),
+});
+
+export const AnnotationNoteFormSchema = z.object({
+  note: z.string().trim().max(5000, 'La nota es demasiado larga'),
+});
+
+export type AnnotationNoteFormValues = z.infer<typeof AnnotationNoteFormSchema>;
+
+export const ReaderPreferencesSchema = z.object({
+  font_scale:  z.number().min(0.8).max(1.6).optional(),
+  font_family: z.enum(['book', 'sans', 'original']).optional(),
+  line_height: z.number().min(1.3).max(2).optional(),
+  justify:     z.boolean().optional(),
+  theme:       z.enum(['auto', 'light', 'dark', 'sepia']).optional(),
+});
+
+export type ReaderPreferencesInput = z.infer<typeof ReaderPreferencesSchema>;
