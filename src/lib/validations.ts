@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AUTO_DETECT, LANGUAGE_CODES } from '@/lib/translation/languages';
 
 export const RegisterSchema = z.object({
   name:     z.string().min(1).max(100),
@@ -153,3 +154,81 @@ export const ReaderPreferencesSchema = z.object({
 });
 
 export type ReaderPreferencesInput = z.infer<typeof ReaderPreferencesSchema>;
+
+// ── Reader phase 2: translation + cards from a passage ───────────────────────
+
+export const TranslationLanguageSchema = z.enum(LANGUAGE_CODES);
+export const SourceLanguageSchema = z.union([z.literal(AUTO_DETECT), TranslationLanguageSchema]);
+
+export const TranslateSelectionSchema = z.object({
+  book_id: z.string().uuid(),
+  text:    z.string().trim().min(1).max(5000),
+  context: z.string().max(2000).nullable().optional(),
+  from:    SourceLanguageSchema,
+  to:      TranslationLanguageSchema,
+});
+
+export const TranslateFormSchema = z.object({
+  from: SourceLanguageSchema,
+  to:   TranslationLanguageSchema,
+});
+
+export type TranslateFormValues = z.infer<typeof TranslateFormSchema>;
+
+export const SuggestBookCardSchema = z.object({
+  book_id:       z.string().uuid(),
+  quote:         z.string().trim().min(1).max(5000),
+  context:       z.string().max(2000).nullable().optional(),
+  chapter_label: z.string().max(300).nullable().optional(),
+  translation:   z.string().max(5000).nullable().optional(),
+});
+
+export const CreateBookCardSchema = z.object({
+  book_id:       z.string().uuid(),
+  deck:          z.union([
+    z.object({ id: z.string().uuid() }),
+    z.object({ new_name: z.string().trim().min(1).max(100) }),
+  ]),
+  front:         z.string().trim().min(1).max(2000),
+  back:          z.string().trim().min(1).max(2000),
+  annotation_id: z.string().uuid().nullable().optional(),
+  selection:     CreateAnnotationSchema.pick({ cfi_range: true, quote: true, chapter_label: true })
+    .extend({ color: HighlightColorSchema })
+    .nullable()
+    .optional(),
+}).refine((value) => Boolean(value.annotation_id) || Boolean(value.selection), {
+  message: 'A highlight or a selection is required',
+});
+
+export const NEW_DECK_VALUE = 'new';
+
+export const BookCardFormSchema = z.object({
+  deck_id:       z.string().min(1, 'Choose a deck'),
+  new_deck_name: z.string().trim().max(100),
+  front:         z.string().trim().min(1, 'Write a question').max(2000),
+  back:          z.string().trim().min(1, 'Write an answer').max(2000),
+}).refine((value) => value.deck_id !== NEW_DECK_VALUE || value.new_deck_name.length > 0, {
+  message: 'Name the new deck',
+  path: ['new_deck_name'],
+});
+
+export type BookCardFormValues = z.infer<typeof BookCardFormSchema>;
+
+// ── Reader phase 3: ask the book (RAG) ───────────────────────────────────────
+
+export const AskBookSchema = z.object({
+  book_id:       z.string().uuid(),
+  question:      z.string().trim().min(1).max(500),
+  history:       z.array(z.object({
+    role:    z.enum(['user', 'assistant']),
+    content: z.string().max(4000),
+  })).max(12).optional(),
+  scope:         z.enum(['read', 'all']),
+  position_href: z.string().max(500).nullable().optional(),
+});
+
+export const AskBookFormSchema = z.object({
+  question: z.string().trim().min(1, 'Ask something about the book').max(500, 'Keep it under 500 characters'),
+});
+
+export type AskBookFormValues = z.infer<typeof AskBookFormSchema>;

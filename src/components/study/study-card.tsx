@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronUp, GraduationCap, Mic, Pencil } from "lucide-react"
+import Link from "next/link"
+import { BookOpen, ChevronUp, GraduationCap, Mic, Pencil } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { FsrsRating } from "@/lib/fsrs/types"
@@ -168,6 +169,20 @@ export function StudyCard({
           </div>
 
           <div className="flex flex-wrap gap-1">
+            {card.source && (
+              <Button
+                variant="ghost"
+                size="sm"
+                nativeButton={false}
+                title={card.source.book_title}
+                render={
+                  <Link href={`/read/${card.source.book_id}?cfi=${encodeURIComponent(card.source.cfi_range)}`} />
+                }
+              >
+                <BookOpen className="size-4" />
+                Open in book
+              </Button>
+            )}
             {!revealed && (
               <Button variant="ghost" size="sm" className="text-primary cursor-pointer" onClick={onVoiceExam}>
                 <Mic className="size-4" />

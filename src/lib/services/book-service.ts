@@ -30,6 +30,8 @@ export interface ReaderBook {
   last_cfi: string | null;
   progress: number;
   locations_json: string | null;
+  translate_from: string | null;
+  translate_to: string | null;
 }
 
 export interface ReaderData {
@@ -40,7 +42,7 @@ export interface ReaderData {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function getOwnedBook(userId: string, bookId: string): Promise<Book> {
+export async function getOwnedBook(userId: string, bookId: string): Promise<Book> {
   if (!UUID_RE.test(bookId)) throw new ServiceError('NOT_FOUND', 'Book not found');
   const [book] = await db.select().from(books).where(eq(books.id, bookId));
   if (!book) throw new ServiceError('NOT_FOUND', 'Book not found');
@@ -100,6 +102,8 @@ export async function getReaderData(userId: string, bookId: string): Promise<Rea
       last_cfi: book.last_cfi,
       progress: book.progress,
       locations_json: book.locations_json,
+      translate_from: book.translate_from,
+      translate_to: book.translate_to,
     },
     annotations,
     preferences,

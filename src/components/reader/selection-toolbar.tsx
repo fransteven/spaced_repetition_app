@@ -1,7 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Copy, NotebookPen, Trash2 } from 'lucide-react';
+import { Copy, Languages, NotebookPen, SquareStack, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { HighlightSwatches } from '@/components/reader/highlight-swatches';
@@ -15,19 +15,20 @@ interface SelectionToolbarProps {
   rect: ViewportRect;
   activeColor?: HighlightColor | null;
   onColor: (color: HighlightColor) => void;
+  onTranslate: () => void;
+  onCard: () => void;
   onNote: () => void;
   onCopy: () => void;
   onDelete?: () => void;
 }
 
-/**
- * Floating toolbar over a text selection or an existing highlight.
- * Built to grow: phase 2 adds "Translate" and "Create card" here.
- */
+/** Floating toolbar over a text selection or an existing highlight. */
 export function SelectionToolbar({
   rect,
   activeColor = null,
   onColor,
+  onTranslate,
+  onCard,
   onNote,
   onCopy,
   onDelete,
@@ -53,12 +54,18 @@ export function SelectionToolbar({
       role="toolbar"
       aria-label="Selection actions"
       onMouseDown={(event) => event.preventDefault()}
-      className="fixed z-40 flex animate-pop-in items-center gap-1 rounded-2xl bg-popover p-1.5 text-popover-foreground shadow-ambient-lg"
+      className="fixed z-40 flex max-w-[calc(100vw-1rem)] animate-pop-in flex-wrap items-center justify-center gap-1 rounded-2xl bg-popover p-1.5 text-popover-foreground shadow-ambient-lg"
       style={position ? { top: position.top, left: position.left } : { top: -9999, left: -9999 }}
     >
       <div className="mr-1 rounded-full bg-surface-container px-0.5">
         <HighlightSwatches active={activeColor} onPick={onColor} />
       </div>
+      <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Translate" onClick={onTranslate}>
+        <Languages />
+      </Button>
+      <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Create card" onClick={onCard}>
+        <SquareStack />
+      </Button>
       <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Add note" onClick={onNote}>
         <NotebookPen />
       </Button>

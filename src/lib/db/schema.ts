@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index, uniqueIndex, vector } from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from '@auth/core/adapters';
 
 export const cardStateEnum = pgEnum('card_state', ['new', 'learning', 'review', 'relearning']);
@@ -157,6 +157,7 @@ export const reminderDeliveries = pgTable('reminder_deliveries', {
 // ── Reader (EPUB) ────────────────────────────────────────────────────────────
 
 export const bookStatusEnum     = pgEnum('book_status',     ['processing', 'ready', 'failed']);
+export const bookIndexStatusEnum = pgEnum('book_index_status', ['pending', 'indexing', 'ready', 'failed']);
 export const highlightColorEnum = pgEnum('highlight_color', ['yellow', 'green', 'blue', 'pink']);
 export const readerThemeEnum    = pgEnum('reader_theme',    ['auto', 'light', 'dark', 'sepia']);
 export const readerFontEnum     = pgEnum('reader_font',     ['book', 'sans', 'original']);
@@ -178,6 +179,9 @@ export const books = pgTable('books', {
   last_cfi:       text('last_cfi'),
   progress:       real('progress').notNull().default(0), // 0..1
   last_read_at:   timestamp('last_read_at'),
+  translate_from: text('translate_from'),           // last translation pair; null = auto-detect
+  translate_to:   text('translate_to'),
+  index_status:   bookIndexStatusEnum('index_status').notNull().default('pending'), // RAG embeddings
   created_at:     timestamp('created_at').defaultNow().notNull(),
   updated_at:     timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -196,6 +200,24 @@ export const bookSections = pgTable('book_sections', {
   uniqueIndex('book_sections_book_spine_idx').on(table.book_id, table.spine_index),
 ]);
 
+// Retrieval unit for "Ask the book": a few paragraphs of one section plus
+// their embedding (gemini-embedding-001, 768 dims, L2-normalized).
+export const EMBEDDING_DIMENSIONS = 768;
+
+export const bookChunks = pgTable('book_chunks', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  book_id:     uuid('book_id').references(() => books.id, { onDelete: 'cascade' }).notNull(),
+  section_id:  uuid('section_id').references(() => bookSections.id, { onDelete: 'cascade' }).notNull(),
+  spine_index: integer('spine_index').notNull(),     // copy of book_sections.spine_index for filtering
+  chunk_index: integer('chunk_index').notNull(),     // order inside the section
+  text:        text('text').notNull(),
+  embedding:   vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+}, (table) => [
+  // Exact search over one book's chunks (a few thousand at most). No global
+  // HNSW index: it would filter by book after the ANN search and miss results.
+  index('book_chunks_book_idx').on(table.book_id, table.spine_index),
+]);
+
 // A highlight with an optional note. A note always hangs off a text range.
 export const bookAnnotations = pgTable('book_annotations', {
   id:            uuid('id').defaultRandom().primaryKey(),
@@ -211,6 +233,29 @@ export const bookAnnotations = pgTable('book_annotations', {
 }, (table) => [
   index('book_annotations_book_idx').on(table.book_id),
 ]);
+
+// Where a card came from. Keeps its own copy of the anchor so the link
+// survives deleting the highlight; removing the book drops the link only.
+export const cardSources = pgTable('card_sources', {
+  card_id:       uuid('card_id').references(() => cards.id, { onDelete: 'cascade' }).primaryKey(),
+  user_id:       uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  book_id:       uuid('book_id').references(() => books.id, { onDelete: 'cascade' }).notNull(),
+  annotation_id: uuid('annotation_id').references(() => bookAnnotations.id, { onDelete: 'set null' }),
+  cfi_range:     text('cfi_range').notNull(),
+  created_at:    timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('card_sources_book_idx').on(table.book_id),
+  index('card_sources_annotation_idx').on(table.annotation_id),
+]);
+
+// Translation cache shared by all users. key = sha256(from, to, text).
+export const translationCache = pgTable('translation_cache', {
+  key:           text('key').primaryKey(),
+  source_lang:   text('source_lang').notNull(),     // detected or requested
+  target_lang:   text('target_lang').notNull(),
+  translation:   text('translation').notNull(),
+  created_at:    timestamp('created_at').defaultNow().notNull(),
+});
 
 // Per-user reading preferences, synced across devices.
 export const readerPreferences = pgTable('reader_preferences', {

@@ -547,9 +547,12 @@
 }
 
 /* epub.js draws highlights in an SVG pane over the page iframe; blending must
-   be set on the pane itself (an SVG attribute would be ignored). */
+   be set on the pane itself (an SVG attribute would be ignored). The pane can
+   be sized 0×0 when it renders before the page has laid out, so let the
+   marks overflow it instead of being clipped. */
 .epub-view > svg {
   mix-blend-mode: var(--highlight-blend);
+  overflow: visible;
 }
 
 /* Forces the dark palette in the reader while the app is light. */

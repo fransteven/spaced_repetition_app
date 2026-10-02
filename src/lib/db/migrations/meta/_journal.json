@@ -71,6 +71,34 @@
       "when": 1790647276660,
       "tag": "0009_complete_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790691966522,
+      "tag": "0010_gorgeous_martin_li",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790914749826,
+      "tag": "0011_enable_pgvector",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790914774250,
+      "tag": "0012_book_chunks",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790915191077,
+      "tag": "0013_drop_chunk_ann_index",
+      "breakpoints": true
     }
   ]
 }

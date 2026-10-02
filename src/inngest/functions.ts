@@ -9,6 +9,7 @@ import {
 } from '@/lib/services/reminder-digest-service';
 import { purgeOldVoiceTranscripts } from '@/lib/services/voice-attempt-service';
 import { markBookFailed, processBook } from '@/lib/services/book-service';
+import { indexBook, markBookIndexFailed } from '@/lib/services/book-rag-service';
 
 // Daily cron at 8:00 AM Colombia time (America/Bogota, UTC-5 year round).
 export const dailyStudyDigest = inngest.createFunction(
@@ -67,6 +68,29 @@ export const processUploadedBook = inngest.createFunction(
   async ({ event, step }) => {
     const bookId = event.data.bookId as string;
     const status = await step.run('parse-and-store', () => processBook(bookId));
+    if (status === 'ready') {
+      await step.sendEvent('queue-index', { name: 'app/book.index', data: { bookId } });
+    }
     return { bookId, status };
+  }
+);
+
+// Embeds book_sections into book_chunks for "Ask the book". Also queued by
+// askBookAction for books uploaded before indexing existed.
+export const indexBookForQuestions = inngest.createFunction(
+  {
+    id: 'book-index',
+    name: 'Index EPUB for questions',
+    triggers: [{ event: 'app/book.index' }],
+    retries: 2,
+    concurrency: { key: 'event.data.bookId', limit: 1 },
+    onFailure: async ({ event }) => {
+      await markBookIndexFailed(event.data.event.data.bookId as string);
+    },
+  },
+  async ({ event, step }) => {
+    const bookId = event.data.bookId as string;
+    const result = await step.run('chunk-and-embed', () => indexBook(bookId));
+    return { bookId, ...result };
   }
 );

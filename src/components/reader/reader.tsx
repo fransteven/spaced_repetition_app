@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
-import { ALargeSmall, ArrowLeft, ChevronLeft, ChevronRight, Highlighter, List } from 'lucide-react';
+import {
+  ALargeSmall,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Highlighter,
+  List,
+  MessageCircleQuestion,
+} from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import type { ReaderBook } from '@/lib/services/book-service';
@@ -32,6 +40,12 @@ import { AnnotationNoteDialog } from '@/components/reader/annotation-note-dialog
 import { AnnotationsSheet } from '@/components/reader/annotations-sheet';
 import { TocSheet } from '@/components/reader/toc-sheet';
 import { ReaderSettingsSheet } from '@/components/reader/reader-settings-sheet';
+import { TranslateSheet } from '@/components/reader/translate-sheet';
+import { AskSheet } from '@/components/reader/ask-sheet';
+import { CreateCardDialog, type CardDraftSource } from '@/components/reader/create-card-dialog';
+import type { BookDeckOptions, CreatedBookCard } from '@/lib/services/book-card-service';
+import { AUTO_DETECT, toLanguageCode, type LanguageCode } from '@/lib/translation/languages';
+import type { TranslateFormValues } from '@/lib/validations';
 
 const PROGRESS_DEBOUNCE_MS = 2000;
 const PREFS_DEBOUNCE_MS = 600;
@@ -40,12 +54,53 @@ interface ReaderProps {
   book: ReaderBook;
   initialAnnotations: BookAnnotation[];
   initialPreferences: ReaderPreferences;
+  initialDeckOptions: BookDeckOptions;
   startCfi: string | null;
 }
 
-type Panel = 'toc' | 'notes' | 'settings' | null;
+type Panel = 'toc' | 'notes' | 'settings' | 'translate' | 'ask' | null;
 
-export function Reader({ book, initialAnnotations, initialPreferences, startCfi }: ReaderProps): React.JSX.Element {
+/** Last pair for this book, else the reader's own language (or Spanish/English). */
+function initialTranslatePair(book: ReaderBook): TranslateFormValues {
+  const bookLanguage = toLanguageCode(book.language);
+  const browser = typeof navigator === 'undefined' ? null : toLanguageCode(navigator.language);
+  const fallback: LanguageCode = browser && browser !== bookLanguage ? browser : bookLanguage === 'es' ? 'en' : 'es';
+  return {
+    from: toLanguageCode(book.translate_from) ?? AUTO_DETECT,
+    to: toLanguageCode(book.translate_to) ?? fallback,
+  };
+}
+
+/** What a translation or a card is made from: a live selection or a saved highlight. */
+function sourceFromSelection(selection: TextSelection, chapter: string | null): CardDraftSource {
+  return {
+    quote: selection.text.slice(0, 5000),
+    context: selection.context,
+    chapterLabel: chapter,
+    annotationId: null,
+    selection: { cfi_range: selection.cfiRange, quote: selection.text.slice(0, 5000), chapter_label: chapter, color: 'yellow' },
+    translation: null,
+  };
+}
+
+function sourceFromAnnotation(annotation: BookAnnotation): CardDraftSource {
+  return {
+    quote: annotation.quote,
+    context: null,
+    chapterLabel: annotation.chapter_label,
+    annotationId: annotation.id,
+    selection: null,
+    translation: null,
+  };
+}
+
+export function Reader({
+  book,
+  initialAnnotations,
+  initialPreferences,
+  initialDeckOptions,
+  startCfi,
+}: ReaderProps): React.JSX.Element {
   const { resolvedTheme } = useTheme();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [preferences, setPreferences] = useState(initialPreferences);
@@ -58,6 +113,10 @@ export function Reader({ book, initialAnnotations, initialPreferences, startCfi 
   const [selection, setSelection] = useState<TextSelection | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<{ id: string; rect: ViewportRect } | null>(null);
   const [noteTarget, setNoteTarget] = useState<BookAnnotation | null>(null);
+  const [translateSource, setTranslateSource] = useState<CardDraftSource | null>(null);
+  const [cardDraft, setCardDraft] = useState<CardDraftSource | null>(null);
+  const [deckOptions, setDeckOptions] = useState(initialDeckOptions);
+  const [translatePair] = useState(() => initialTranslatePair(book));
 
   // ── Theme: <html data-reader-theme> re-points tokens for the whole page
   // (including portalled sheets) while the reader is mounted.
@@ -202,6 +261,35 @@ export function Reader({ book, initialAnnotations, initialPreferences, startCfi 
     setActiveHighlight(null);
   };
 
+  const dismissSelection = (): void => {
+    reader.clearSelection();
+    setSelection(null);
+    setActiveHighlight(null);
+  };
+
+  const openTranslate = (source: CardDraftSource): void => {
+    dismissSelection();
+    setTranslateSource(source);
+    setPanel('translate');
+  };
+
+  const openCard = (source: CardDraftSource): void => {
+    dismissSelection();
+    setCardDraft(source);
+  };
+
+  const handleCardCreated = (created: CreatedBookCard): void => {
+    const { annotation, deck } = created;
+    if (annotation) setAnnotations((current) => [...current, annotation]);
+    setDeckOptions((current) => ({
+      decks: current.decks.some((item) => item.id === deck.id)
+        ? current.decks
+        : [...current.decks, deck].sort((a, b) => a.name.localeCompare(b.name)),
+      default_deck_id: deck.id,
+    }));
+    toast.success(`Card added to ${deck.name}`);
+  };
+
   const active = activeHighlight ? annotations.find((item) => item.id === activeHighlight.id) ?? null : null;
 
   const navigate = (target: string): void => {
@@ -260,6 +348,15 @@ export function Reader({ book, initialAnnotations, initialPreferences, startCfi 
           )}
         </div>
         <div className={cn(pillGroup, 'justify-self-end')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={pillButton}
+            aria-label="Ask this book"
+            onClick={() => setPanel('ask')}
+          >
+            <MessageCircleQuestion />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -332,6 +429,8 @@ export function Reader({ book, initialAnnotations, initialPreferences, startCfi 
         <SelectionToolbar
           rect={selection.rect}
           onColor={(color) => void createHighlight(color)}
+          onTranslate={() => openTranslate(sourceFromSelection(selection, location?.chapter ?? null))}
+          onCard={() => openCard(sourceFromSelection(selection, location?.chapter ?? null))}
           onNote={async () => {
             const created = await createHighlight('yellow');
             if (created) setNoteTarget(created);
@@ -348,6 +447,8 @@ export function Reader({ book, initialAnnotations, initialPreferences, startCfi 
             setActiveHighlight(null);
             void patchAnnotation(active.id, { color });
           }}
+          onTranslate={() => openTranslate(sourceFromAnnotation(active))}
+          onCard={() => openCard(sourceFromAnnotation(active))}
           onNote={() => {
             setActiveHighlight(null);
             setNoteTarget(active);
@@ -365,6 +466,41 @@ export function Reader({ book, initialAnnotations, initialPreferences, startCfi 
           onClose={() => setNoteTarget(null)}
         />
       )}
+
+      {cardDraft && (
+        <CreateCardDialog
+          bookId={book.id}
+          bookTitle={book.title}
+          source={cardDraft}
+          deckOptions={deckOptions}
+          onCreated={handleCardCreated}
+          onClose={() => setCardDraft(null)}
+        />
+      )}
+
+      <TranslateSheet
+        open={panel === 'translate'}
+        onOpenChange={(open) => setPanel(open ? 'translate' : null)}
+        bookId={book.id}
+        passage={translateSource ? { text: translateSource.quote, context: translateSource.context } : null}
+        initialPair={translatePair}
+        onCreateCard={(translation) => {
+          if (!translateSource) return;
+          setPanel(null);
+          setCardDraft({ ...translateSource, translation });
+        }}
+      />
+
+      <AskSheet
+        open={panel === 'ask'}
+        onOpenChange={(open) => setPanel(open ? 'ask' : null)}
+        bookId={book.id}
+        positionHref={location?.href ?? null}
+        onOpenSource={(source) => {
+          setPanel(null);
+          void reader.goToPassage(source.href, source.locator);
+        }}
+      />
 
       <TocSheet
         open={panel === 'toc'}

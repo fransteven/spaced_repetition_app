@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Book, Contents, Location, NavItem, Rendition } from 'epubjs';
+import type Section from 'epubjs/types/section';
 
 import type { BookAnnotation } from '@/lib/services/annotation-service';
 import { highlightStyles, type ReaderTokens } from '@/components/reader/reader-theme';
@@ -18,9 +19,11 @@ const LOCATION_CHARS = 1600; // ≈ one printed page; stable across font sizes
 const STYLE_ID = 'nc-reader-style';
 const SWIPE_MIN_PX = 50;
 const TAP_DELAY_MS = 80;
+const FLASH_MS = 2500;
 
 export interface ReaderLocation {
   cfi: string;
+  href: string; // spine item href of the current page (relative to the OPF)
   progress: number; // 0..1
   page: number | null;
   totalPages: number | null;
@@ -39,6 +42,7 @@ export interface ViewportRect {
 export interface TextSelection {
   cfiRange: string;
   text: string;
+  context: string | null; // enclosing paragraph — helps translation and card prompts
   rect: ViewportRect;
 }
 
@@ -65,6 +69,7 @@ export interface EpubReader {
   next: () => void;
   prev: () => void;
   display: (target: string) => void;
+  goToPassage: (sectionPath: string, locator: string) => Promise<void>;
   clearSelection: () => void;
   renderHighlights: (annotations: BookAnnotation[], tokens: ReaderTokens) => void;
 }
@@ -120,6 +125,24 @@ function toViewportRect(range: Range): ViewportRect | null {
   };
 }
 
+const BLOCK_SELECTOR = 'p, li, blockquote, dd, dt, td, figcaption, h1, h2, h3, h4, h5, h6';
+const CONTEXT_MAX_CHARS = 1500;
+
+/** Text of the block around a range, trimmed to a window around the selection. */
+function contextFor(range: Range, selected: string): string | null {
+  const node = range.commonAncestorContainer;
+  // The node lives in the book's iframe, so check against that realm's Element.
+  const frameWindow = node.ownerDocument?.defaultView;
+  const element = frameWindow && node instanceof frameWindow.Element ? node : node.parentElement;
+  const block = element?.closest(BLOCK_SELECTOR) ?? element;
+  const text = block?.textContent?.replace(/\s+/g, ' ').trim();
+  if (!text || text === selected) return null;
+  if (text.length <= CONTEXT_MAX_CHARS) return text;
+  const at = Math.max(0, text.indexOf(selected.slice(0, 40)));
+  const start = Math.max(0, at - CONTEXT_MAX_CHARS / 2);
+  return text.slice(start, start + CONTEXT_MAX_CHARS);
+}
+
 export function useEpubReader(options: Options): EpubReader {
   const { bookId, container } = options;
   const [status, setStatus] = useState<EpubReader['status']>('loading');
@@ -131,6 +154,7 @@ export function useEpubReader(options: Options): EpubReader {
   const highlighted = useRef<string[]>([]);
   const currentCfi = useRef<string | null>(options.initialCfi);
   const tapTimer = useRef<number | undefined>(undefined);
+  const flashTokens = useRef<ReaderTokens | null>(null);
 
   // Latest options without re-creating the rendition.
   const latest = useRef(options);
@@ -158,6 +182,7 @@ export function useEpubReader(options: Options): EpubReader {
 
     latest.current.onRelocated({
       cfi,
+      href: location.start.href,
       progress: Math.min(1, Math.max(0, progress)),
       page,
       totalPages,
@@ -204,8 +229,8 @@ export function useEpubReader(options: Options): EpubReader {
         const range = rendition.getRange(cfiRange);
         const text = range?.toString().trim();
         const rect = range ? toViewportRect(range) : null;
-        if (!text || !rect) return;
-        latest.current.onSelect({ cfiRange, text, rect });
+        if (!range || !text || !rect) return;
+        latest.current.onSelect({ cfiRange, text, context: contextFor(range, text), rect });
       });
 
       rendition.on('click', (event: MouseEvent, contents: Contents) => {
@@ -318,6 +343,7 @@ export function useEpubReader(options: Options): EpubReader {
 
   const renderHighlights = useCallback((annotations: BookAnnotation[], tokens: ReaderTokens): void => {
     const rendition = renditionRef.current;
+    flashTokens.current = tokens;
     if (!rendition) return;
     highlighted.current.forEach((cfi) => rendition.annotations.remove(cfi, 'highlight'));
     highlighted.current = [];
@@ -339,6 +365,50 @@ export function useEpubReader(options: Options): EpubReader {
     }
   }, []);
 
+  /**
+   * Jumps to a passage known only by its section (zip path, from the server)
+   * and its opening words, then flashes it. Falls back to the section start.
+   */
+  const goToPassage = useCallback(async (sectionPath: string, locator: string): Promise<void> => {
+    const book = bookRef.current;
+    const rendition = renditionRef.current;
+    if (!book || !rendition) return;
+
+    const target = decodeURIComponent(sectionPath);
+    const items: Section[] = [];
+    book.spine.each((item: Section) => items.push(item));
+    const section = items.find((item) => {
+      const href = decodeURIComponent(item.href);
+      return target === href || target.endsWith(`/${href}`);
+    });
+    if (!section) return;
+
+    let cfi: string | null = null;
+    try {
+      await section.load(book.load.bind(book));
+      const words = locator.split(/\s+/).filter(Boolean);
+      // find() matches inside a single text node, so try shorter phrases too.
+      for (const query of [locator.slice(0, 60), words.slice(0, 6).join(' '), words.slice(0, 3).join(' ')]) {
+        if (query.length < 8) continue;
+        const matches: unknown = section.find(query);
+        const first: unknown = Array.isArray(matches) ? matches[0] : null;
+        if (first && typeof first === 'object' && 'cfi' in first && typeof first.cfi === 'string') {
+          cfi = first.cfi;
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('[reader] passage lookup', error);
+    }
+
+    await rendition.display(cfi ?? section.href);
+    if (cfi && flashTokens.current) {
+      const flashCfi = cfi;
+      rendition.annotations.highlight(flashCfi, {}, () => undefined, 'nc-flash', highlightStyles(flashTokens.current, 'yellow'));
+      window.setTimeout(() => rendition.annotations.remove(flashCfi, 'highlight'), FLASH_MS);
+    }
+  }, []);
+
   const clearSelection = useCallback((): void => {
     const rendition = renditionRef.current;
     if (!rendition) return;
@@ -351,6 +421,7 @@ export function useEpubReader(options: Options): EpubReader {
     next: useCallback(() => void renditionRef.current?.next(), []),
     prev: useCallback(() => void renditionRef.current?.prev(), []),
     display: useCallback((target: string) => void renditionRef.current?.display(target), []),
+    goToPassage,
     clearSelection,
     renderHighlights,
   };

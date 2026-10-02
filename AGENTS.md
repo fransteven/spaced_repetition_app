@@ -205,7 +205,13 @@ Defined in `src/lib/db/schema.ts` (source of truth): `books` (file in private
 Vercel Blob, reading position as CFI + progress), `book_sections` (plain-text
 version per spine item — input for RAG), `book_annotations` (highlight + optional
 note, anchored by `cfi_range`) and `reader_preferences` (one row per user).
-Plan: `docs/plans/epub-reader-fase-1.md`.
+Phase 2 adds `card_sources` (card → book + CFI, for "Open in book" in study),
+`translation_cache` (shared, keyed by sha256 of pair + text) and
+`books.translate_from/translate_to` (last language pair per book).
+Phase 3 adds pgvector (custom migration `0011`), `book_chunks` (768-dim
+`gemini-embedding-001` vectors, exact per-book search — no global ANN index)
+and `books.index_status`; indexing runs in the Inngest function `book-index`.
+Plans: `docs/plans/epub-reader-fase-1.md` … `epub-reader-fase-3.md`.
 
 ### 4.3 Migration commands
 
@@ -322,8 +328,11 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `DELETE /api/books/[id]` | — | Deletes blobs, then the row (cascades) |
 | `GET /api/books/[id]/file` · `/cover` | — | Streams the private blob after an ownership check |
 
-Reader mutations (progress, locations cache, annotations, preferences) are Server
-Actions in `src/app/actions/reader-actions.ts`.
+Reader mutations (progress, locations cache, annotations, preferences,
+translation, card suggestion, card creation from a passage and "Ask this book")
+are Server Actions in `src/app/actions/reader-actions.ts`. Short structured
+Gemini calls go through `generateStructured()` and embeddings through
+`embedTexts()`, both in `src/lib/gemini.ts`.
 
 ### 6.3 Study session card ordering (strict — do not reorder)
 

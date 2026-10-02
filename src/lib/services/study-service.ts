@@ -1,6 +1,6 @@
 import { and, eq, lte, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { cards, cardSchedules, decks, reviewLogs } from '@/lib/db/schema';
+import { books, cards, cardSchedules, cardSources, decks, reviewLogs } from '@/lib/db/schema';
 import { ServiceError } from '@/lib/services/service-error';
 import { review, previewIntervals } from '@/lib/fsrs/algorithm';
 import type { FsrsRating, ScheduleInput } from '@/lib/fsrs/types';
@@ -16,6 +16,7 @@ export interface StudyCardItem {
   stability:   number;
   state:       'new' | 'learning' | 'review' | 'relearning';
   previews:    Record<FsrsRating, number>;
+  source:      { book_id: string; book_title: string; cfi_range: string } | null; // card made while reading
 }
 
 export interface StudySessionData {
@@ -52,12 +53,17 @@ export async function getStudySession(userId: string, deckId: string): Promise<S
       scheduled_days: cardSchedules.scheduled_days,
       due_date:       cardSchedules.due_date,
       last_review:    cardSchedules.last_review,
+      source_book_id: cardSources.book_id,
+      source_cfi:     cardSources.cfi_range,
+      source_title:   books.title,
     })
     .from(cards)
     .innerJoin(
       cardSchedules,
       and(eq(cardSchedules.card_id, cards.id), eq(cardSchedules.user_id, userId)),
     )
+    .leftJoin(cardSources, and(eq(cardSources.card_id, cards.id), eq(cardSources.user_id, userId)))
+    .leftJoin(books, eq(books.id, cardSources.book_id))
     .where(
       and(
         eq(cards.deck_id, deckId),
@@ -113,6 +119,9 @@ export async function getStudySession(userId: string, deckId: string): Promise<S
       stability:   r.stability,
       state:       r.state,
       previews:    previewIntervals(scheduleInput, now),
+      source:      r.source_book_id && r.source_cfi && r.source_title
+        ? { book_id: r.source_book_id, book_title: r.source_title, cfi_range: r.source_cfi }
+        : null,
     };
   });
 

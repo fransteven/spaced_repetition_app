@@ -1,0 +1,1 @@
+DROP INDEX "book_chunks_embedding_idx";
