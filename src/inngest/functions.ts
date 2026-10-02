@@ -8,8 +8,11 @@ import {
   sendDigestForUser,
 } from '@/lib/services/reminder-digest-service';
 import { purgeOldVoiceTranscripts } from '@/lib/services/voice-attempt-service';
+import { z } from 'zod';
 import { markBookFailed, processBook } from '@/lib/services/book-service';
-import { indexBook, markBookIndexFailed } from '@/lib/services/book-rag-service';
+import { failBookIndex } from '@/lib/services/book-index-service';
+import { ServiceError } from '@/lib/services/service-error';
+import { callLlmService } from '@/lib/llm-client';
 
 // Daily cron at 8:00 AM Colombia time (America/Bogota, UTC-5 year round).
 export const dailyStudyDigest = inngest.createFunction(
@@ -75,8 +78,12 @@ export const processUploadedBook = inngest.createFunction(
   }
 );
 
-// Embeds book_sections into book_chunks for "Ask the book". Also queued by
-// askBookAction for books uploaded before indexing existed.
+const BookEventSchema = z.object({ bookId: z.string().uuid() });
+const IndexStartSchema = z.object({ status: z.enum(['started', 'already_running']) });
+
+// Asks srs-llm-api to index a book for "Ask the book". The service answers 202 and keeps working in the
+// background, driving the index state in this app through /api/internal/rag/*. Also queued for books
+// uploaded before indexing existed (see getAskContext) and by processUploadedBook.
 export const indexBookForQuestions = inngest.createFunction(
   {
     id: 'book-index',
@@ -85,12 +92,19 @@ export const indexBookForQuestions = inngest.createFunction(
     retries: 2,
     concurrency: { key: 'event.data.bookId', limit: 1 },
     onFailure: async ({ event }) => {
-      await markBookIndexFailed(event.data.event.data.bookId as string);
+      const { bookId } = BookEventSchema.parse(event.data.event.data);
+      try {
+        await failBookIndex(bookId); // only affects a run that is still marked as indexing
+      } catch (error) {
+        if (!(error instanceof ServiceError)) throw error; // the book may have been deleted meanwhile
+      }
     },
   },
   async ({ event, step }) => {
-    const bookId = event.data.bookId as string;
-    const result = await step.run('chunk-and-embed', () => indexBook(bookId));
+    const { bookId } = BookEventSchema.parse(event.data);
+    const result = await step.run('start-index', () =>
+      callLlmService('/v1/rag/index', { book_id: bookId }, IndexStartSchema)
+    );
     return { bookId, ...result };
   }
 );
