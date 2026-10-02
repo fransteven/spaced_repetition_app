@@ -28,6 +28,7 @@ export interface SectionPage {
 export interface SearchHit {
   id: string;
   spine_index: number;
+  chunk_index: number; // with spine_index, the exact reading order
   section_title: string | null;
   href: string; // zip path of the section (book_sections.href)
   text: string;
@@ -178,6 +179,7 @@ export async function searchBookChunks(
     .select({
       id: bookChunks.id,
       spine_index: bookChunks.spine_index,
+      chunk_index: bookChunks.chunk_index,
       section_title: bookSections.title,
       href: bookSections.href,
       text: bookChunks.text,
