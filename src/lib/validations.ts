@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EMBEDDING_DIMENSIONS } from '@/lib/rag/constants';
 import { AUTO_DETECT, LANGUAGE_CODES } from '@/lib/translation/languages';
 
 export const RegisterSchema = z.object({
@@ -213,6 +214,44 @@ export const BookCardFormSchema = z.object({
 });
 
 export type BookCardFormValues = z.infer<typeof BookCardFormSchema>;
+
+// ── Reader phase 3: internal RAG API (srs-llm-api ⇄ Next.js) ─────────────────
+
+const EmbeddingSchema = z.array(z.number()).length(EMBEDDING_DIMENSIONS);
+
+export const InternalSearchSchema = z.object({
+  user_id:     z.string().uuid(),
+  book_id:     z.string().uuid(),
+  embedding:   EmbeddingSchema,
+  spine_limit: z.number().int().min(0).nullable(),
+  limit:       z.number().int().min(1).max(30),
+});
+
+export const BookIdSchema = z.string().uuid();
+
+export const InternalSectionsQuerySchema = z.object({
+  after: z.coerce.number().int().min(-1).default(-1),     // spine_index cursor; -1 = from the start
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const InternalChunkSchema = z.object({
+  section_id:  z.string().uuid(),
+  spine_index: z.number().int().min(0),
+  chunk_index: z.number().int().min(0),
+  text:        z.string().min(1).max(10_000),
+  embedding:   EmbeddingSchema,
+});
+
+export const InternalChunksSchema = z.object({
+  chunks: z.array(InternalChunkSchema).min(1).max(100),
+});
+
+export const InternalIndexCompleteSchema = z.object({
+  fingerprint: z.string().min(1).max(200),
+  chunk_count: z.number().int().min(0).max(100_000),
+});
+
+export type InternalChunk = z.infer<typeof InternalChunkSchema>;
 
 // ── Reader phase 3: ask the book (RAG) ───────────────────────────────────────
 

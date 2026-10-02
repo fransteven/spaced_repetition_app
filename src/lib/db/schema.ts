@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index, uniqueIndex, vector } from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from '@auth/core/adapters';
+import { EMBEDDING_DIMENSIONS } from '../rag/constants';
 
 export const cardStateEnum = pgEnum('card_state', ['new', 'learning', 'review', 'relearning']);
 export const ratingEnum    = pgEnum('rating',     ['again', 'hard', 'good', 'easy']);
@@ -182,6 +183,7 @@ export const books = pgTable('books', {
   translate_from: text('translate_from'),           // last translation pair; null = auto-detect
   translate_to:   text('translate_to'),
   index_status:   bookIndexStatusEnum('index_status').notNull().default('pending'), // RAG embeddings
+  index_fingerprint: text('index_fingerprint'),     // provider:model:dims:chunker of the current index
   created_at:     timestamp('created_at').defaultNow().notNull(),
   updated_at:     timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -200,10 +202,9 @@ export const bookSections = pgTable('book_sections', {
   uniqueIndex('book_sections_book_spine_idx').on(table.book_id, table.spine_index),
 ]);
 
-// Retrieval unit for "Ask the book": a few paragraphs of one section plus
-// their embedding (gemini-embedding-001, 768 dims, L2-normalized).
-export const EMBEDDING_DIMENSIONS = 768;
-
+// Retrieval unit for "Ask the book": a few paragraphs of one section plus their
+// embedding. Written by the srs-llm-api service (through the internal API); the
+// fingerprint of the model that produced them is kept in books.index_fingerprint.
 export const bookChunks = pgTable('book_chunks', {
   id:          uuid('id').defaultRandom().primaryKey(),
   book_id:     uuid('book_id').references(() => books.id, { onDelete: 'cascade' }).notNull(),
@@ -215,7 +216,22 @@ export const bookChunks = pgTable('book_chunks', {
 }, (table) => [
   // Exact search over one book's chunks (a few thousand at most). No global
   // HNSW index: it would filter by book after the ANN search and miss results.
-  index('book_chunks_book_idx').on(table.book_id, table.spine_index),
+  // The unique key makes chunk uploads idempotent and also serves (book, spine) lookups.
+  uniqueIndex('book_chunks_book_spine_chunk_idx').on(table.book_id, table.spine_index, table.chunk_index),
+]);
+
+// One row per paid LLM call a user triggers (ask / translate / suggest). Counted per UTC day
+// to cap spend; see src/lib/services/llm-usage-service.ts.
+export const LLM_USAGE_KINDS = ['ask', 'translate', 'suggest'] as const;
+export type LlmUsageKind = (typeof LLM_USAGE_KINDS)[number];
+
+export const llmUsage = pgTable('llm_usage', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  user_id:    uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  kind:       text('kind', { enum: LLM_USAGE_KINDS }).notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('llm_usage_user_kind_idx').on(table.user_id, table.kind, table.created_at),
 ]);
 
 // A highlight with an optional note. A note always hangs off a text range.
