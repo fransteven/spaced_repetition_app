@@ -6,8 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowUp, BookOpenText } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import type { AskSource } from '@/lib/services/book-rag-service';
-import { askBookAction } from '@/app/actions/reader-actions';
+import { requestAnswer } from '@/lib/rag/ask-client';
+import type { AskSource, AskStage } from '@/lib/rag/ask-types';
 import { AskBookFormSchema, type AskBookFormValues } from '@/lib/validations';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,12 +26,19 @@ const SUGGESTIONS = [
   'Explain the key terms in this chapter',
 ];
 
+const STAGE_LABELS: Record<AskStage, string> = {
+  searching: 'Searching the book…',
+  reading: 'Reading the passages…',
+  writing: 'Writing the answer…',
+};
+
 interface ChatMessage {
   id: number;
   role: 'user' | 'assistant';
   content: string;
   answerable?: boolean;
   sources?: AskSource[];
+  streaming?: boolean;
 }
 
 interface AskSheetProps {
@@ -43,13 +50,24 @@ interface AskSheetProps {
   onOpenSource: (source: AskSource) => void;
 }
 
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => {
+      window.clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
+}
+
 export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSource }: AskSheetProps): React.JSX.Element {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [scope, setScope] = useState<'read' | 'all'>('read');
-  const [phase, setPhase] = useState<'idle' | 'thinking' | 'indexing'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'working' | 'indexing'>('idle');
+  const [stage, setStage] = useState<AskStage>('searching');
   const [error, setError] = useState<string | null>(null);
   const nextId = useRef(1);
-  const alive = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<AskBookFormValues>({
@@ -57,48 +75,79 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
     defaultValues: { question: '' },
   });
 
+  // Closing the panel (or leaving the reader) cancels the request; the service stops its run too.
   useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
+    if (!open) abortRef.current?.abort();
+  }, [open]);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-  }, [messages, phase]);
+  }, [messages, phase, stage]);
 
   const ask = async ({ question }: AskBookFormValues): Promise<void> => {
     if (phase !== 'idle') return;
     setError(null);
-    const history = messages.slice(-HISTORY_TURNS).map(({ role, content }) => ({ role, content }));
-    setMessages((current) => [...current, { id: nextId.current++, role: 'user', content: question }]);
-    reset({ question: '' });
-    setPhase('thinking');
+    const history = messages
+      .filter((message) => !message.streaming && message.content)
+      .slice(-HISTORY_TURNS)
+      .map(({ role, content }) => ({ role, content }));
 
-    // A book that has never been indexed is queued on the first question;
-    // keep asking (cheap while indexing) until its index is ready.
-    for (let attempt = 0; attempt < INDEX_POLL_LIMIT && alive.current; attempt++) {
-      const result = await askBookAction({ book_id: bookId, question, history, scope, position_href: positionHref });
-      if (!alive.current) return;
-      if (!result.data) {
-        setError(result.error?.message ?? 'Could not answer');
-        setPhase('idle');
-        return;
+    const assistantId = nextId.current++;
+    setMessages((current) => [
+      ...current,
+      { id: nextId.current++, role: 'user', content: question },
+      { id: assistantId, role: 'assistant', content: '', streaming: true },
+    ]);
+    reset({ question: '' });
+    setStage('searching');
+    setPhase('working');
+
+    const patch = (changes: Partial<ChatMessage>): void =>
+      setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, ...changes } : message)));
+    const dropPlaceholder = (): void => setMessages((current) => current.filter((message) => message.id !== assistantId));
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const handlers = {
+      onStage: setStage,
+      onToken: (text: string): void =>
+        setMessages((current) =>
+          current.map((message) => (message.id === assistantId ? { ...message, content: message.content + text } : message))
+        ),
+    };
+
+    try {
+      // A book that has not been indexed yet is queued by the first question; keep asking
+      // (cheap while indexing, and not counted against the daily cap) until it is ready.
+      for (let attempt = 0; attempt < INDEX_POLL_LIMIT; attempt++) {
+        const outcome = await requestAnswer({ bookId, question, history, scope, positionHref }, handlers, controller.signal);
+
+        if (outcome.kind === 'final') {
+          patch({ content: outcome.answer, answerable: outcome.answerable, sources: outcome.sources, streaming: false });
+          setPhase('idle');
+          return;
+        }
+        if (outcome.kind === 'error') {
+          dropPlaceholder();
+          setError(outcome.message);
+          setPhase('idle');
+          return;
+        }
+        patch({ content: '' });
+        setPhase('indexing');
+        await wait(INDEX_POLL_MS, controller.signal);
+        if (controller.signal.aborted) break;
+        setStage('searching');
+        setPhase('working');
       }
-      if (result.data.status === 'answered') {
-        const { answer, answerable, sources } = result.data;
-        setMessages((current) => [...current, { id: nextId.current++, role: 'assistant', content: answer, answerable, sources }]);
-        setPhase('idle');
-        return;
-      }
-      setPhase('indexing');
-      await new Promise((resolve) => setTimeout(resolve, INDEX_POLL_MS));
+      if (!controller.signal.aborted) setError('Preparing the book is taking longer than expected. Try again in a few minutes.');
+    } catch {
+      // Only an abort rejects: the panel was closed mid-answer, so there is nothing left to show.
     }
-    if (alive.current) {
-      setError('Preparing the book is taking longer than expected. Try again in a few minutes.');
-      setPhase('idle');
-    }
+    dropPlaceholder();
+    setPhase('idle');
   };
 
   // Built per event (not during render): `ask` reads refs.
@@ -154,12 +203,26 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
                 {message.content}
               </p>
             ) : (
-              <div key={message.id} className="space-y-3 rounded-2xl bg-card p-4 shadow-ambient">
-                <MarkdownContent
-                  content={message.content}
-                  size="sm"
-                  className={cn('text-body-md leading-relaxed', !message.answerable && 'text-on-surface-variant')}
-                />
+              <div key={message.id} className="space-y-3 rounded-2xl bg-card p-4 shadow-ambient" aria-busy={message.streaming}>
+                {message.streaming && !message.content ? (
+                  <div className="space-y-2">
+                    <p className="text-label-md text-on-surface-variant">
+                      {phase === 'indexing' ? 'Getting the book ready…' : STAGE_LABELS[stage]}
+                    </p>
+                    <Skeleton className="h-4 w-11/12" />
+                    <Skeleton className="h-4 w-4/5" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                ) : (
+                  <MarkdownContent
+                    content={message.content}
+                    size="sm"
+                    className={cn(
+                      'text-body-md leading-relaxed',
+                      !message.streaming && !message.answerable && 'text-on-surface-variant'
+                    )}
+                  />
+                )}
                 {message.sources && message.sources.length > 0 && (
                   <ul className="space-y-1.5">
                     {message.sources.map((source) => (
@@ -187,13 +250,6 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
             )
           )}
 
-          {phase === 'thinking' && (
-            <div className="space-y-2 rounded-2xl bg-card p-4 shadow-ambient">
-              <Skeleton className="h-4 w-11/12" />
-              <Skeleton className="h-4 w-4/5" />
-              <Skeleton className="h-4 w-2/3" />
-            </div>
-          )}
           {phase === 'indexing' && (
             <div className="flex items-start gap-3 rounded-2xl bg-surface-container-low p-4">
               <BookOpenText className="mt-0.5 size-5 shrink-0 animate-pulse text-primary" />

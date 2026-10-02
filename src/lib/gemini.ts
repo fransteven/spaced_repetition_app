@@ -3,10 +3,9 @@ import type { z } from 'zod';
 import { ServiceError } from '@/lib/services/service-error';
 
 /**
- * Server-only Gemini helpers for the reader: short structured calls
- * (translation, card suggestions, book Q&A) and embeddings for retrieval.
- * Generation tries each model in order; the output is validated with Zod
- * before it is trusted.
+ * Server-only Gemini helper for the reader's short structured calls (translation and
+ * card suggestions; moving to srs-llm-api). It tries each model in order and validates
+ * the output with Zod before it is trusted.
  */
 
 const MODELS = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3-flash-preview'] as const;
@@ -78,57 +77,4 @@ export async function generateStructured<S extends z.ZodType>(input: {
 
   console.error(`[${input.context}] all models exhausted`, lastError);
   throw new ServiceError('UNAVAILABLE', 'The AI service is busy. Try again in a moment.');
-}
-
-// ── Embeddings ───────────────────────────────────────────────────────────────
-
-const EMBEDDING_MODEL = 'gemini-embedding-001';
-const EMBEDDING_BATCH = 100; // batchEmbedContents limit
-const EMBEDDING_ATTEMPTS = 4;
-
-/** Below 3072 dims gemini-embedding-001 returns unnormalized vectors. */
-function normalize(values: number[]): number[] {
-  const norm = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0));
-  return norm > 0 ? values.map((value) => value / norm) : values;
-}
-
-/**
- * Embeds texts in batches. Documents and queries use different task types so
- * the retrieval space is asymmetric, as the model expects.
- */
-export async function embedTexts(input: {
-  context: string;
-  texts: string[];
-  taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY';
-  dimensions: number;
-}): Promise<number[][]> {
-  const ai = client(input.context, 60_000);
-  const vectors: number[][] = [];
-
-  for (let start = 0; start < input.texts.length; start += EMBEDDING_BATCH) {
-    const batch = input.texts.slice(start, start + EMBEDDING_BATCH);
-    for (let attempt = 1; ; attempt++) {
-      try {
-        const response = await ai.models.embedContent({
-          model: EMBEDDING_MODEL,
-          contents: batch,
-          config: { taskType: input.taskType, outputDimensionality: input.dimensions },
-        });
-        const values = (response.embeddings ?? []).map((embedding) => embedding.values ?? []);
-        if (values.length !== batch.length || values.some((vector) => vector.length !== input.dimensions)) {
-          throw new Error(`Unexpected embedding response (${values.length}/${batch.length})`);
-        }
-        vectors.push(...values.map(normalize));
-        break;
-      } catch (error) {
-        if (!isTransient(error) || attempt >= EMBEDDING_ATTEMPTS) {
-          console.error(`[${input.context}] embeddings`, error);
-          throw new ServiceError('UNAVAILABLE', 'The AI service is busy. Try again in a moment.');
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
-      }
-    }
-  }
-
-  return vectors;
 }

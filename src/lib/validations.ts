@@ -255,13 +255,13 @@ export type InternalChunk = z.infer<typeof InternalChunkSchema>;
 
 // ── Reader phase 3: ask the book (RAG) ───────────────────────────────────────
 
-export const AskBookSchema = z.object({
-  book_id:       z.string().uuid(),
+/** Body of POST /api/books/[id]/ask. The book comes from the path and the user from the session. */
+export const AskRequestSchema = z.object({
   question:      z.string().trim().min(1).max(500),
   history:       z.array(z.object({
     role:    z.enum(['user', 'assistant']),
     content: z.string().max(4000),
-  })).max(12).optional(),
+  })).max(12).default([]),
   scope:         z.enum(['read', 'all']),
   position_href: z.string().max(500).nullable().optional(),
 });

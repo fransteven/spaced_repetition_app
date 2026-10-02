@@ -3,7 +3,6 @@
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import {
-  AskBookSchema,
   BookLocationsSchema,
   CreateAnnotationSchema,
   CreateBookCardSchema,
@@ -14,8 +13,6 @@ import {
   UpdateAnnotationSchema,
 } from '@/lib/validations';
 import { translateSelection, type TranslationResult } from '@/lib/services/translation-service';
-import { askBook, type AskResult } from '@/lib/services/book-rag-service';
-import { inngest } from '@/inngest/client';
 import {
   createCardFromBook,
   suggestCardFromPassage,
@@ -117,17 +114,6 @@ export async function suggestBookCardAction(input: unknown): Promise<ActionResul
 
 export async function createBookCardAction(input: unknown): Promise<ActionResult<CreatedBookCard>> {
   return run('createBookCardAction', CreateBookCardSchema, input, createCardFromBook);
-}
-
-export async function askBookAction(input: unknown): Promise<ActionResult<AskResult>> {
-  return run('askBookAction', AskBookSchema, input, async (userId, data) => {
-    const result = await askBook(userId, data);
-    // Books uploaded before indexing existed (or whose index failed) are queued lazily.
-    if (result.status === 'indexing' && result.needs_index) {
-      await inngest.send({ name: 'app/book.index', data: { bookId: data.book_id } });
-    }
-    return result;
-  });
 }
 
 export async function updateReaderPreferencesAction(input: unknown): Promise<ActionResult<null>> {
