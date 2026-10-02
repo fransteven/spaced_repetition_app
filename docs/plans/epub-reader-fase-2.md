@@ -2,6 +2,8 @@
 
 > Estado: **implementado**. Traducción estilo Google y creación de cards desde el texto.
 >
+> **Actualización:** la traducción y la sugerencia de tarjeta ya no llaman a Gemini desde Next.js. Pasaron a `srs-llm-api` con OpenAI (ver `epub-reader-fase-3-langgraph.md`). Propiedad, caché y par de idiomas por libro siguen en Next.js.
+>
 > Fuera de alcance (fases siguientes): RAG sobre `book_sections` (fase 3), PDF (fase 4), agente que genera cards por capítulo (fase 5).
 
 ## Flujo

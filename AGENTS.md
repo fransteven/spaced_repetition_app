@@ -13,7 +13,7 @@ A web-based **spaced repetition flashcard app** (Anki-style). Users create decks
 | Repo | Purpose |
 |---|---|
 | `srs-app/` | Next.js 16 · App Router · API Routes · FSRS engine · reminder scheduler |
-| `srs-llm-api/` | Separate FastAPI repo · Gemini Live voice gateway |
+| `srs-llm-api/` | Separate FastAPI repo · Gemini Live voice gateway · LangGraph RAG, translation and card suggestions (OpenAI). **Never connects to the database** (see §6.5) |
 
 ---
 
@@ -25,7 +25,7 @@ Database : NeonDB (PostgreSQL serverless) · Drizzle ORM
 Auth     : NextAuth v5 (next-auth@beta) · @auth/drizzle-adapter
 Images   : Cloudinary (server-only)
 Reminders: Nodemailer (SMTP) · Inngest (cron)
-LLM layer: Gemini API · FastAPI voice gateway in a separate repo
+LLM layer: OpenAI via srs-llm-api (LangGraph RAG, translation, card suggestions) · Gemini (exam, voice grading, Gemini Live gateway)
 Deploy   : Vercel (Next.js) · Railway or Render (FastAPI)
 ```
 
@@ -208,10 +208,13 @@ note, anchored by `cfi_range`) and `reader_preferences` (one row per user).
 Phase 2 adds `card_sources` (card → book + CFI, for "Open in book" in study),
 `translation_cache` (shared, keyed by sha256 of pair + text) and
 `books.translate_from/translate_to` (last language pair per book).
-Phase 3 adds pgvector (custom migration `0011`), `book_chunks` (768-dim
-`gemini-embedding-001` vectors, exact per-book search — no global ANN index)
-and `books.index_status`; indexing runs in the Inngest function `book-index`.
-Plans: `docs/plans/epub-reader-fase-1.md` … `epub-reader-fase-3.md`.
+Phase 3 adds pgvector (custom migration `0011`), `book_chunks` (768-dim OpenAI
+`text-embedding-3-small` vectors, exact per-book search — no global ANN index),
+`books.index_status`, `books.index_fingerprint` (provider:model:dims:chunker of the
+current index; a mismatch rebuilds it) and `llm_usage` (per-user daily cap on paid
+LLM calls). Chunks are written by the srs-llm-api service through the internal API
+(§6.5), never directly.
+Plans: `docs/plans/epub-reader-fase-1.md` … `epub-reader-fase-3-langgraph.md`.
 
 ### 4.3 Migration commands
 
@@ -327,12 +330,35 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `PATCH /api/books/[id]` | `{ title?, author? }` | Verify ownership |
 | `DELETE /api/books/[id]` | — | Deletes blobs, then the row (cascades) |
 | `GET /api/books/[id]/file` · `/cover` | — | Streams the private blob after an ownership check |
+| `POST /api/books/[id]/ask` | `{ question, history?, scope: 'read'\|'all', position_href? }` | "Ask this book": SSE stream from srs-llm-api (§6.5). `202 {status:'indexing'}` while the book is being indexed |
 
 Reader mutations (progress, locations cache, annotations, preferences,
 translation, card suggestion, card creation from a passage and "Ask this book")
-are Server Actions in `src/app/actions/reader-actions.ts`. Short structured
-Gemini calls go through `generateStructured()` and embeddings through
-`embedTexts()`, both in `src/lib/gemini.ts`.
+are Server Actions in `src/app/actions/reader-actions.ts` (the question itself goes through
+the streaming route above). Every LLM call of the reader goes through the srs-llm-api
+service via `callLlmService()` in `src/lib/llm-client.ts`.
+
+### 6.5 LLM service (`srs-llm-api`)
+
+Next.js owns the database, sessions and every permission check. The Python service owns
+the LLM logic and the OpenAI key and has **no database credentials**: it reads and writes
+book data through internal routes of this app. Both directions use the shared
+`LLM_SERVICE_TOKEN` (≥ 32 characters, timing-safe compare; a different secret from
+`VOICE_SERVICE_TOKEN`).
+
+| Direction | Endpoint | Purpose |
+|---|---|---|
+| Next → Python | `POST /v1/rag/ask` (SSE) | Answer a question with the LangGraph graph; Next first checks ownership, the spoiler limit (`spine_limit`), index readiness and the daily cap |
+| Next → Python | `POST /v1/rag/index` (202) | Index a book in the background (Inngest `book-index`) |
+| Next → Python | `POST /v1/llm/translate` · `/v1/llm/suggest-card` | Single structured-output calls |
+| Python → Next | `POST /api/internal/rag/search` | Vector search for one user's book (ownership + spoiler filter in SQL) |
+| Python → Next | `GET …/books/[id]/sections` · `PUT …/chunks` · `POST …/index/begin\|complete\|fail` | Indexing: page sections, upload embedded chunks, claim (compare-and-set) and release the index |
+
+Rules: internal routes live under `src/app/api/internal/rag/` and start with
+`rejectUnlessInternal()`; the data side is `src/lib/services/book-index-service.ts`.
+Paid calls reserve a row in `llm_usage` first (`reserveLlmCall`); caps are configurable
+(`LLM_DAILY_LIMIT_ASK|TRANSLATE|SUGGEST`). An index whose `index_fingerprint` differs
+from the service's current one is rebuilt automatically on the next question.
 
 ### 6.3 Study session card ordering (strict — do not reorder)
 
@@ -450,8 +476,10 @@ SMTP_USER=
 SMTP_PASS=
 SMTP_FROM=                        # optional, falls back to SMTP_USER
 INNGEST_DEV=1                     # local dev; use INNGEST_SIGNING_KEY in prod
-LLM_API_URL=http://localhost:8000  # FastAPI (Phase 6)
-GEMINI_API_KEY=                     # server only; text and voice grading
+LLM_API_URL=http://localhost:8000  # srs-llm-api (RAG, translation, card suggestions)
+LLM_SERVICE_TOKEN=                  # shared with srs-llm-api, >= 32 chars (the OpenAI key lives there only)
+# LLM_DAILY_LIMIT_ASK=100 · LLM_DAILY_LIMIT_TRANSLATE=300 · LLM_DAILY_LIMIT_SUGGEST=100   (optional, per user per UTC day)
+GEMINI_API_KEY=                     # server only; exam and voice grading
 VOICE_WS_URL=ws://localhost:8000/v1/voice/ws
 VOICE_SERVICE_TOKEN=                # shared only between Next.js and FastAPI
 BLOB_READ_WRITE_TOKEN=              # Vercel Blob (private EPUBs + covers)

@@ -32,6 +32,19 @@ Set `NEXT_INTERNAL_BASE_URL=http://localhost:3000`, the same `VOICE_SERVICE_TOKE
 
 For local use, start the FastAPI service in its own terminal with `.venv/bin/uvicorn app.main:app --env-file .env --port 8000`, then start this app with `npm run dev`. Restart Next.js after adding `VOICE_WS_URL` or `VOICE_SERVICE_TOKEN`. Confirm the gateway at `http://localhost:8000/health`. A Vercel deployment requires the same Next.js variables in Vercel and a deployed FastAPI gateway with a public `wss://` URL; the local `ws://localhost:8000` value works only on your own machine.
 
+## Reader AI features (RAG, translation, card suggestions)
+
+"Ask this book", the translation panel and AI card suggestions run in the separate `srs-llm-api` service (FastAPI + LangGraph + OpenAI). This app keeps the database, sessions and permissions; the service never touches the database and reads book data through `/api/internal/rag/*`.
+
+Set in `.env` (and the same token in the service's `.env`; the OpenAI key lives only there):
+
+```text
+LLM_API_URL=http://localhost:8000
+LLM_SERVICE_TOKEN=...  # openssl rand -hex 32, at least 32 characters
+```
+
+Run the three processes locally: `npm run dev`, `npm run inngest` (indexing is queued there) and, in the other repo, `uv run uvicorn app.main:app --port 8000`. Without an OpenAI key, start the service with `LLM_PROVIDER=fake` to exercise everything offline for free. After pulling these changes run `npx drizzle-kit migrate`: migration `0014` discards the old Gemini vectors and every book is re-indexed on its next question. Architecture and contract: `docs/plans/epub-reader-fase-3-langgraph.md` and `AGENTS.md` §6.5.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
