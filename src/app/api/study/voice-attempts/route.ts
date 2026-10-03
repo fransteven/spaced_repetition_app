@@ -4,6 +4,9 @@ import { StartVoiceAttemptSchema } from '@/lib/validations';
 import { startVoiceAttempt } from '@/lib/services/voice-attempt-service';
 import { ServiceError } from '@/lib/services/service-error';
 
+// Starting a voice exam waits for a sleeping voice service (free hosting) before it issues the ticket.
+export const maxDuration = 120;
+
 export async function POST(request: Request): Promise<NextResponse> {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json(

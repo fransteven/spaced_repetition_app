@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AI_STARTING_HINT, useSlowStart } from '@/hooks/use-slow-start';
 
 export interface Passage {
   text: string;
@@ -104,6 +105,7 @@ export function TranslateSheet({
   const key = passage ? `${from}|${to}|${attempt}|${passage.text}` : '';
   const current = outcome?.key === key ? outcome : null;
   const loading = Boolean(open && passage && !current);
+  const startingService = useSlowStart(loading);
 
   useEffect(() => {
     if (!open || !passage) return;
@@ -183,6 +185,7 @@ export function TranslateSheet({
             <p className="mb-2 text-label-sm uppercase text-on-surface-variant">{languageLabel(to)}</p>
             {loading ? (
               <div className="space-y-2">
+                {startingService && <p className="text-label-md text-on-surface-variant">{AI_STARTING_HINT}</p>}
                 <Skeleton className="h-4 w-11/12" />
                 <Skeleton className="h-4 w-4/5" />
                 <Skeleton className="h-4 w-2/3" />

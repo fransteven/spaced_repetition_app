@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { auth } from '@/lib/auth';
+import { warmLlmService } from '@/lib/llm-client';
 import { getReaderData } from '@/lib/services/book-service';
 import { getBookDeckOptions } from '@/lib/services/book-card-service';
 import { ServiceError } from '@/lib/services/service-error';
@@ -11,6 +13,10 @@ export const metadata: Metadata = {
   description: 'Read, highlight and take notes.',
 };
 
+// Translating, suggesting a card and asking the book (server actions of this page) may first wait for a sleeping
+// srs-llm-api (LLM_WAKE_TIMEOUT_MS, 90 s) and then for the model.
+export const maxDuration = 180;
+
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ cfi?: string | string[] }>;
@@ -20,6 +26,9 @@ export default async function ReadPage({ params, searchParams }: Props): Promise
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
   const userId = session.user.id;
+
+  // The AI service may be asleep (free hosting): start waking it while the book loads, so it is up when needed.
+  after(() => warmLlmService().catch(() => undefined));
 
   const [{ id }, { cfi }] = await Promise.all([params, searchParams]);
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogBackdrop, DialogDescription, DialogPopup, DialogPortal, DialogTitle } from "@/components/ui/dialog"
 import type { FsrsRating } from "@/lib/fsrs/types"
 import { unwrapError } from "@/lib/api-envelope"
+import { useSlowStart, VOICE_STARTING_HINT } from "@/hooks/use-slow-start"
 
 const StartSchema = z.object({
   attempt_id: z.string().uuid(),
@@ -45,6 +46,7 @@ interface Props {
 
 export function VoiceExamDialog({ open, onOpenChange, cardId, onReviewed }: Props): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>("idle")
+  const startingService = useSlowStart(phase === "connecting")
   const [error, setError] = useState<string | null>(null)
   const [studentTranscript, setStudentTranscript] = useState("")
   const [tutorTranscript, setTutorTranscript] = useState("")
@@ -305,7 +307,7 @@ export function VoiceExamDialog({ open, onOpenChange, cardId, onReviewed }: Prop
             </div>
             {tutorTranscript && <p className="mb-3 text-sm text-on-surface">{tutorTranscript}</p>}
             {studentTranscript && <p className="text-sm text-on-surface-variant"><span className="font-medium">You:</span> {studentTranscript}</p>}
-            {!tutorTranscript && !studentTranscript && <p className="text-sm text-on-surface-variant">Start when your microphone is ready.</p>}
+            {!tutorTranscript && !studentTranscript && <p className="text-sm text-on-surface-variant">{phase === "connecting" && startingService ? VOICE_STARTING_HINT : "Start when your microphone is ready."}</p>}
           </div>
 
           {error && <p className="rounded-lg bg-error-container p-3 text-sm text-on-error-container" role="alert">{error}</p>}

@@ -360,6 +360,14 @@ Paid calls reserve a row in `llm_usage` first (`reserveLlmCall`); caps are confi
 (`LLM_DAILY_LIMIT_ASK|TRANSLATE|SUGGEST`). An index whose `index_fingerprint` differs
 from the service's current one is rebuilt automatically on the next question.
 
+Cold start: free hosts (Render's free plan) stop the service after 15 idle minutes and need
+30-60 s to start it. Every call goes through `postToLlmService()` (`src/lib/llm-client.ts`), which
+first waits for `GET /health` (`wakeService()` in `src/lib/service-wake.ts`, up to
+`LLM_WAKE_TIMEOUT_MS`, default 90 s, `0` = off), so the request timeout (30 s) never includes the
+boot. The reader page warms the service with `after()`, the ask route wakes it before spending the
+daily cap, and `startVoiceAttempt` wakes it before issuing the 60 s ticket. Routes and pages that can
+wait have `maxDuration` ≥ 120 s. Never call the service with a bare `fetch`.
+
 ### 6.3 Study session card ordering (strict — do not reorder)
 
 1. `state = 'learning' OR 'relearning'` AND `due_date <= now` (most urgent)
@@ -479,6 +487,7 @@ INNGEST_DEV=1                     # local dev; use INNGEST_SIGNING_KEY in prod
 LLM_API_URL=http://localhost:8000  # srs-llm-api (RAG, translation, card suggestions)
 LLM_SERVICE_TOKEN=                  # shared with srs-llm-api, >= 32 chars (the OpenAI key lives there only)
 # LLM_DAILY_LIMIT_ASK=100 · LLM_DAILY_LIMIT_TRANSLATE=300 · LLM_DAILY_LIMIT_SUGGEST=100   (optional, per user per UTC day)
+# LLM_WAKE_TIMEOUT_MS=90000          (optional; how long to wait for a sleeping srs-llm-api, 0 = off)
 GEMINI_API_KEY=                     # server only; exam and voice grading
 VOICE_WS_URL=ws://localhost:8000/v1/voice/ws
 VOICE_SERVICE_TOKEN=                # shared only between Next.js and FastAPI

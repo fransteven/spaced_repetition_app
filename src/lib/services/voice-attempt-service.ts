@@ -7,12 +7,18 @@ import { gradeVoiceAnswer, VOICE_GRADING_MODEL } from '@/lib/services/voice-grad
 import { listSkills } from '@/lib/services/skill-service';
 import { applyReview } from '@/lib/services/study-service';
 import { ServiceError } from '@/lib/services/service-error';
+import { wakeService } from '@/lib/service-wake';
 
 const LIVE_MODEL = 'gemini-3.8-live';
 const TICKET_LIFETIME_MS = 60_000;
 // The conversation ends after two minutes; allow time for grading and spoken feedback.
 const ATTEMPT_LIFETIME_MS = 180_000;
 const DAILY_ATTEMPT_LIMIT = 30;
+
+/** HTTP origin of the voice service, which also serves `/health` (VOICE_WS_URL is ws:// or wss://). */
+function voiceServiceOrigin(wsUrl: string): string {
+  return new URL(wsUrl.replace(/^ws/, 'http')).origin;
+}
 
 function hashTicket(ticket: string): string {
   return createHash('sha256').update(ticket).digest('hex');
@@ -29,6 +35,8 @@ export async function startVoiceAttempt(userId: string, cardId: string): Promise
   if (!wsUrl || !/^wss?:\/\//.test(wsUrl)) {
     throw new ServiceError('UNAVAILABLE', 'Voice service is not configured');
   }
+  // A sleeping service takes 30-60 s to start, longer than the ticket lives: wake it before issuing one.
+  await wakeService(voiceServiceOrigin(wsUrl));
 
   const ticket = randomBytes(32).toString('base64url');
   const now = new Date();

@@ -43,6 +43,8 @@ LLM_API_URL=http://localhost:8000
 LLM_SERVICE_TOKEN=...  # openssl rand -hex 32, at least 32 characters
 ```
 
+On free hosting that sleeps when idle (Render's free plan), the app wakes the service before calling it, waiting up to `LLM_WAKE_TIMEOUT_MS` (90 s by default; `0` for an always-on host). The first translation, card suggestion or question after a pause can therefore take up to a minute, and the UI says so.
+
 Run the three processes locally: `npm run dev`, `npm run inngest` (indexing is queued there) and, in the other repo, `uv run uvicorn app.main:app --port 8000`. Without an OpenAI key, start the service with `LLM_PROVIDER=fake` to exercise everything offline for free. After pulling these changes run `npx drizzle-kit migrate`: migration `0014` discards the old Gemini vectors and every book is re-indexed on its next question. Architecture and contract: `docs/plans/epub-reader-fase-3-langgraph.md` and `AGENTS.md` §6.5.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.

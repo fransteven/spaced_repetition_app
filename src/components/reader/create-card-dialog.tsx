@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AI_STARTING_HINT, useSlowStart } from '@/hooks/use-slow-start';
 
 export interface CardDraftSource {
   quote: string;
@@ -70,6 +71,7 @@ export function CreateCardDialog({
   const deckId = useWatch({ control, name: 'deck_id' });
 
   const [suggesting, setSuggesting] = useState(false);
+  const startingService = useSlowStart(suggesting);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const suggest = useCallback(async (): Promise<void> => {
@@ -195,7 +197,7 @@ export function CreateCardDialog({
                 id="book-card-front"
                 rows={3}
                 disabled={suggesting}
-                placeholder={suggesting ? 'Drafting a question from this passage…' : 'What is the question?'}
+                placeholder={suggesting ? (startingService ? AI_STARTING_HINT : 'Drafting a question from this passage…') : 'What is the question?'}
                 aria-invalid={Boolean(errors.front)}
                 {...register('front')}
               />

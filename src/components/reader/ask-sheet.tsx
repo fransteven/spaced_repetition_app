@@ -15,10 +15,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MarkdownContent } from '@/components/ui/markdown-content';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { FilterChip } from '@/components/primitives/filter-chip';
+import { AI_STARTING_HINT } from '@/hooks/use-slow-start';
 
 const INDEX_POLL_MS = 5000;
 const INDEX_POLL_LIMIT = 60; // ~5 minutes
 const HISTORY_TURNS = 6;
+const SLOW_START_MS = 4000; // no event by then: the service is probably waking up (free hosting)
 
 const SUGGESTIONS = [
   'Summarize this chapter',
@@ -65,6 +67,7 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
   const [scope, setScope] = useState<'read' | 'all'>('read');
   const [phase, setPhase] = useState<'idle' | 'working' | 'indexing'>('idle');
   const [stage, setStage] = useState<AskStage>('searching');
+  const [startingService, setStartingService] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nextId = useRef(1);
   const abortRef = useRef<AbortController | null>(null);
@@ -111,7 +114,10 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
     const controller = new AbortController();
     abortRef.current = controller;
     const handlers = {
-      onStage: setStage,
+      onStage: (next: AskStage): void => {
+        setStartingService(false);
+        setStage(next);
+      },
       onToken: (text: string): void =>
         setMessages((current) =>
           current.map((message) => (message.id === assistantId ? { ...message, content: message.content + text } : message))
@@ -122,7 +128,13 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
       // A book that has not been indexed yet is queued by the first question; keep asking
       // (cheap while indexing, and not counted against the daily cap) until it is ready.
       for (let attempt = 0; attempt < INDEX_POLL_LIMIT; attempt++) {
-        const outcome = await requestAnswer({ bookId, question, history, scope, positionHref }, handlers, controller.signal);
+        const slowStart = window.setTimeout(() => setStartingService(true), SLOW_START_MS);
+        const outcome = await requestAnswer({ bookId, question, history, scope, positionHref }, handlers, controller.signal).finally(
+          () => {
+            window.clearTimeout(slowStart);
+            setStartingService(false);
+          }
+        );
 
         if (outcome.kind === 'final') {
           patch({ content: outcome.answer, answerable: outcome.answerable, sources: outcome.sources, streaming: false });
@@ -207,7 +219,7 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
                 {message.streaming && !message.content ? (
                   <div className="space-y-2">
                     <p className="text-label-md text-on-surface-variant">
-                      {phase === 'indexing' ? 'Getting the book ready…' : STAGE_LABELS[stage]}
+                      {phase === 'indexing' ? 'Getting the book ready…' : startingService ? AI_STARTING_HINT : STAGE_LABELS[stage]}
                     </p>
                     <Skeleton className="h-4 w-11/12" />
                     <Skeleton className="h-4 w-4/5" />

@@ -3,7 +3,7 @@ import type { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { inngest } from '@/inngest/client';
 import { fail, failFromError, ok } from '@/lib/api-response';
-import { getLlmServiceConfig } from '@/lib/llm-client';
+import { postToLlmService, warmLlmService } from '@/lib/llm-client';
 import { getAskContext } from '@/lib/services/book-index-service';
 import { reserveLlmCall } from '@/lib/services/llm-usage-service';
 import { ServiceError } from '@/lib/services/service-error';
@@ -11,8 +11,9 @@ import { AskRequestSchema, BookIdSchema } from '@/lib/validations';
 
 type Params = { params: Promise<{ id: string }> };
 
-// Streaming answers can take a while (retrieval, grading and generation run in srs-llm-api).
-export const maxDuration = 60;
+// A sleeping service (free hosting) can take up to LLM_WAKE_TIMEOUT_MS (90 s) to start, then retrieval, grading
+// and generation run in srs-llm-api for up to a minute.
+export const maxDuration = 180;
 
 const HISTORY_TURNS = 6;
 const UpstreamErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
@@ -50,26 +51,32 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
       return ok({ status: 'indexing' as const }, 202); // polling does not count against the daily cap
     }
 
+    // Wake a sleeping service before the daily cap is spent: a service that never starts costs the user nothing.
+    try {
+      await warmLlmService();
+    } catch (error) {
+      if (request.signal.aborted) return new Response(null, { status: 499 });
+      throw error;
+    }
     await reserveLlmCall(userId, 'ask');
 
-    const { baseUrl, token } = getLlmServiceConfig();
     let upstream: Response;
     try {
-      upstream = await fetch(`${baseUrl}/v1/rag/ask`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({
+      upstream = await postToLlmService(
+        '/v1/rag/ask',
+        {
           user_id: userId,
           book_id: bookId.data,
           book: context.book,
           question: parsed.data.question,
           history: parsed.data.history.slice(-HISTORY_TURNS),
           spine_limit: context.spine_limit,
-        }),
-        signal: request.signal, // the browser closing the stream cancels the run in srs-llm-api
-      });
+        },
+        { signal: request.signal } // the browser closing the stream cancels the run in srs-llm-api
+      );
     } catch (error) {
       if (request.signal.aborted) return new Response(null, { status: 499 });
+      if (error instanceof ServiceError) throw error;
       console.error('[POST /api/books/[id]/ask] srs-llm-api unreachable', error);
       throw new ServiceError('UNAVAILABLE', 'The AI service is unreachable. Try again in a moment.');
     }

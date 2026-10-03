@@ -52,6 +52,16 @@ Variables del servicio: ver `srs-llm-api/.env.example`. Puntos clave:
 - Costo estimado con `gpt-5-nano`: ≈ $0,0006 por pregunta; indexar un libro de 500 páginas ≈ $0,004.
 - `LLM_PROVIDER=fake`: modo offline determinista y gratis (embeddings por hashing, respuestas extractivas) para pruebas de UI y desarrollo. `FAKE_TOKEN_DELAY_SECONDS` lo pone en cámara lenta.
 
+## Hosting con arranque en frío (Render gratis)
+El plan gratis de Render detiene el servicio tras 15 minutos sin tráfico y tarda 30-60 s en arrancarlo. Next lo absorbe así:
+- `postToLlmService()` (`src/lib/llm-client.ts`) hace antes `GET /health` (`wakeService()`, `src/lib/service-wake.ts`) con su propio presupuesto (`LLM_WAKE_TIMEOUT_MS`, 90 s por defecto, `0` lo desactiva). Solo una respuesta JSON `{"status":"ok"}` cuenta como despierto: la página HTML o el 5xx del host mientras arranca se reintentan cada 2 s. El timeout de 30 s de la petición ya no incluye el arranque.
+- Un servicio que respondió hace menos de 10 min no se sondea de nuevo; las llamadas concurrentes comparten un solo sondeo. Si el host se durmió entre el sondeo y la petición (conexión rechazada o 502/503), se despierta otra vez y se reintenta una sola vez; un timeout de la petición nunca se repite.
+- La página del lector llama a `warmLlmService()` con `after()` para que el servicio ya esté despierto cuando se traduzca o se pregunte. La ruta de preguntas despierta el servicio antes de gastar el tope diario (`maxDuration` 180 s). Iniciar un examen de voz despierta el servicio antes de emitir el ticket (vive 60 s; `maxDuration` 120 s).
+- La indexación (Inngest → `POST /v1/rag/index`) pasa por el mismo camino, y el trabajo en segundo plano sigue en el proceso de Render, que es de larga vida.
+- La UI avisa tras 4 s sin respuesta («Starting the AI service…») en traducir, sugerir tarjeta, preguntar y examen de voz.
+- Verificado con un servidor simulado (conexión rechazada 5 s, `/health` retenido 4 s, HTML y 503 de arranque, nunca arranca, 503 en la petición, timeout) y de punta a punta con Python apagado: pregunta contestada y libro indexado tras arrancarlo 12-15 s más tarde.
+- Para evitar el arranque del todo: servicio de pago siempre activo, o un ping periódico a `/health` (consume las 750 h gratis del mes).
+
 ## Seguridad
 - Token compartido separado del de voz, ≥ 32 caracteres, comparación de tiempo constante, el servicio falla cerrado si falta.
 - Ownership y filtro anti-spoiler en SQL dentro de Next; una posición de lectura desconocida limita la respuesta a la primera sección, nunca al libro completo.
