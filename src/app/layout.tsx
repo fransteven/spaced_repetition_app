@@ -22,9 +22,9 @@ export const metadata: Metadata = {
   },
   description: "Advanced spaced repetition flashcard app powered by FSRS 4.5 algorithm",
   icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
-    apple: "/logo.png",
+    icon: "/icon.png?v=neurocards-1",
+    shortcut: "/icon.png?v=neurocards-1",
+    apple: "/logo.png?v=neurocards-1",
   },
   appleWebApp: {
     capable: true,
