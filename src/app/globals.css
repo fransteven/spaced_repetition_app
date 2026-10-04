@@ -362,8 +362,15 @@
   --reader-sepia-on-surface-variant: #6e6350;
   --reader-swatch-light:    #ffffff;
   --reader-swatch-on-light: #191c1d;
-  --reader-swatch-dark:     #191c1d;
-  --reader-swatch-on-dark:  #f0f1f2;
+  --reader-swatch-dark:     var(--reader-black-surface);
+  --reader-swatch-on-dark:  var(--reader-black-on-surface);
+
+  /* Reader — dark theme is true black (OLED). Only consumed by [data-reader-theme="dark"].
+     Text stays off-white to avoid halation on #000. */
+  --reader-black-surface:            #000000;
+  --reader-black-surface-container:  #161718;
+  --reader-black-on-surface:         #dcdddf;
+  --reader-black-on-surface-variant: #a3a1b3;
 }
 
 .dark {
@@ -555,27 +562,28 @@
   overflow: visible;
 }
 
-/* Forces the dark palette in the reader while the app is light. */
-:not(.dark)[data-reader-theme="dark"] {
-  --background: #191c1d;
-  --foreground: #f0f1f2;
-  --surface: #191c1d;
-  --card: #2e3132;
-  --card-foreground: #f0f1f2;
-  --popover: #2e3132;
-  --popover-foreground: #f0f1f2;
-  --muted: #2e3132;
-  --muted-foreground: #c7c4d8;
-  --accent: #2e3132;
-  --accent-foreground: #f0f1f2;
-  --surface-bright: #383a3b;
-  --surface-container-lowest: #141617;
-  --surface-container-low: #1f2223;
-  --surface-container: #232627;
-  --surface-container-high: #2e3031;
-  --surface-container-highest: #383a3b;
-  --on-surface: #e1e3e4;
-  --on-surface-variant: #c7c4d8;
+/* Reader dark theme: pure black page, whatever the app theme is. Chrome and
+   sheets sit on near-black containers so they still read as layers. */
+[data-reader-theme="dark"] {
+  --background: var(--reader-black-surface);
+  --foreground: var(--reader-black-on-surface);
+  --surface: var(--reader-black-surface);
+  --card: var(--reader-black-surface-container);
+  --card-foreground: var(--reader-black-on-surface);
+  --popover: var(--reader-black-surface-container);
+  --popover-foreground: var(--reader-black-on-surface);
+  --muted: #232526;
+  --muted-foreground: var(--reader-black-on-surface-variant);
+  --accent: #232526;
+  --accent-foreground: var(--reader-black-on-surface);
+  --surface-bright: #2a2c2d;
+  --surface-container-lowest: var(--reader-black-surface);
+  --surface-container-low: var(--reader-black-surface-container);
+  --surface-container: #1c1e1f;
+  --surface-container-high: #232526;
+  --surface-container-highest: #2a2c2d;
+  --on-surface: var(--reader-black-on-surface);
+  --on-surface-variant: var(--reader-black-on-surface-variant);
   --border: #464555;
   --input: #464555;
   --outline-variant: #464555;

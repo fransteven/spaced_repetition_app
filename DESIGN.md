@@ -187,6 +187,7 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
 ### Tema del lector
 - Mientras el lector está montado, `<html>` lleva `data-reader-theme` (`sepia` · `light` · `dark`; `auto` no lo pone). Los bloques de `globals.css` re-apuntan los tokens base, así primitivos y sheets en portal siguen el tema sin clases `dark:`.
 - **Sepia (default, estilo Apple Books):** `--reader-sepia-surface #f1e3ca`, `--reader-sepia-surface-container #fef3e2`, `--reader-sepia-on-surface #35271a`, `--reader-sepia-on-surface-variant #6e6350` (≥ 4.5:1; el `#847861` de Apple Books no cumple).
+- **Dark = negro puro (OLED):** `--reader-black-surface #000000` en página y `<meta name="theme-color">`; texto `--reader-black-on-surface #dcdddf` (no blanco puro, evita halación); chrome/sheets sobre `--reader-black-surface-container #161718`. Aplica tanto con la app en claro como en oscuro.
 - El contenido del libro vive en un iframe: `src/components/reader/reader-theme.ts` lee los tokens resueltos y los inyecta como CSS. Nunca hex en ese archivo.
 
 ### Resaltados
@@ -202,6 +203,7 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
 - Barra superior: grupos de pills `rounded-full bg-card shadow-ambient` (izq.: volver, índice, notas · der.: ajustes), título centrado en `text-body-sm font-semibold`.
 - Pie: "N of M" en `text-body-sm tabular text-on-surface-variant` + `MasteryThread` corto.
 - Tap al centro oculta/muestra el chrome (conserva el espacio para no re-paginar). Tap en bordes o swipe cambian de página.
+- Pantalla completa: pill `Maximize`/`Minimize` al final del grupo derecho (o tecla `f`). Usa la Fullscreen API sobre `<html>` (los sheets en portal siguen visibles); al entrar oculta el chrome. En iPhone (sin API) el botón explica "Añadir a pantalla de inicio" (`app/manifest.ts`, `display: standalone`); instalada, el botón desaparece. En < 640 px, con el botón visible, el título cede su espacio.
 - Toolbar de selección: `rounded-2xl bg-popover shadow-ambient-lg animate-pop-in`.
 
 ---

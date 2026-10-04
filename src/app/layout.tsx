@@ -26,6 +26,10 @@ export const metadata: Metadata = {
     shortcut: "/icon.png",
     apple: "/logo.png",
   },
+  appleWebApp: {
+    capable: true,
+    title: "NeuroCards",
+  },
 };
 
 import { Providers } from "@/components/providers";

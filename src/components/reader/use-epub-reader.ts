@@ -51,6 +51,8 @@ interface Callbacks {
   onSelect: (selection: TextSelection | null) => void;
   onHighlightClick: (annotationId: string, rect: ViewportRect) => void;
   onToggleChrome: () => void;
+  /** "f" key, inside or outside the page iframe. */
+  onToggleFullscreen: () => void;
   onLocationsGenerated: (json: string) => void;
 }
 
@@ -76,6 +78,10 @@ export interface EpubReader {
 
 function flattenToc(items: NavItem[]): NavItem[] {
   return items.flatMap((item) => [item, ...flattenToc(item.subitems ?? [])]);
+}
+
+function isFullscreenKey(event: KeyboardEvent): boolean {
+  return (event.key === 'f' || event.key === 'F') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat;
 }
 
 function stripFragment(href: string): string {
@@ -256,6 +262,7 @@ export function useEpubReader(options: Options): EpubReader {
       rendition.on('keydown', (event: KeyboardEvent) => {
         if (event.key === 'ArrowLeft') void rendition.prev();
         if (event.key === 'ArrowRight') void rendition.next();
+        if (isFullscreenKey(event)) latest.current.onToggleFullscreen();
       });
 
       rendition.on('touchstart', (event: TouchEvent) => {
@@ -330,12 +337,13 @@ export function useEpubReader(options: Options): EpubReader {
     return () => window.clearTimeout(timer);
   }, [css, status]);
 
-  // Arrow keys when focus is outside the iframe.
+  // Arrow keys (and "f") when focus is outside the iframe.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.target instanceof HTMLElement && event.target.closest('input, textarea, [role="dialog"]')) return;
       if (event.key === 'ArrowLeft') void renditionRef.current?.prev();
       if (event.key === 'ArrowRight') void renditionRef.current?.next();
+      if (isFullscreenKey(event)) latest.current.onToggleFullscreen();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

@@ -11,7 +11,9 @@ import {
   ChevronRight,
   Highlighter,
   List,
+  Maximize,
   MessageCircleQuestion,
+  Minimize,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -35,6 +37,7 @@ import {
   type TextSelection,
   type ViewportRect,
 } from '@/components/reader/use-epub-reader';
+import { useFullscreen } from '@/components/reader/use-fullscreen';
 import { SelectionToolbar } from '@/components/reader/selection-toolbar';
 import { AnnotationNoteDialog } from '@/components/reader/annotation-note-dialog';
 import { AnnotationsSheet } from '@/components/reader/annotations-sheet';
@@ -132,6 +135,26 @@ export function Reader({
 
   useEffect(() => () => void delete document.documentElement.dataset.readerTheme, []);
 
+  // Mobile browsers tint their own bars with theme-color: match the page so the
+  // only thing around the text is the reader background (pure black in Dark).
+  useEffect(() => {
+    if (!tokens) return;
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    const created = !meta;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    const previous = meta.content;
+    meta.content = tokens.background;
+    const tag = meta;
+    return () => {
+      if (created) tag.remove();
+      else tag.content = previous;
+    };
+  }, [tokens]);
+
   const css = useMemo(
     () => (tokens ? buildReaderCss(tokens, preferences, origin) : ''),
     [tokens, preferences, origin]
@@ -181,6 +204,19 @@ export function Reader({
 
   const toggleChrome = useCallback(() => setChromeVisible((visible) => !visible), []);
 
+  // ── Fullscreen: entering it hides the chrome (tap the centre to bring it back).
+  const fullscreen = useFullscreen(useCallback((active: boolean) => setChromeVisible(!active), []));
+  const { support: fullscreenSupport, toggle: toggleFullscreenApi } = fullscreen;
+  const toggleFullscreen = useCallback(() => {
+    if (fullscreenSupport === 'api') toggleFullscreenApi();
+    else if (fullscreenSupport === 'install') {
+      toast.info('Full screen on iPhone', {
+        description: 'Tap Share → Add to Home Screen, then open NeuroCards from the icon to read without browser bars.',
+        duration: 8000,
+      });
+    }
+  }, [fullscreenSupport, toggleFullscreenApi]);
+
   const handleLocationsGenerated = useCallback(
     (json: string) => {
       void saveBookLocationsAction({ book_id: book.id, locations_json: json });
@@ -199,6 +235,7 @@ export function Reader({
     onSelect: handleSelect,
     onHighlightClick: handleHighlightClick,
     onToggleChrome: toggleChrome,
+    onToggleFullscreen: toggleFullscreen,
     onLocationsGenerated: handleLocationsGenerated,
   });
 
@@ -304,6 +341,7 @@ export function Reader({
         ? `${Math.round(location.progress * 100)}%`
         : '';
 
+  const showFullscreenButton = fullscreen.support === 'api' || fullscreen.support === 'install';
   const pillGroup = 'flex items-center gap-0.5 rounded-full bg-card p-1 shadow-ambient';
   const pillButton = 'size-11 rounded-full sm:size-9';
 
@@ -341,7 +379,8 @@ export function Reader({
             <Highlighter />
           </Button>
         </div>
-        <div className="min-w-0 max-w-[40vw] text-center sm:max-w-md">
+        {/* Six 44 px pills leave no room for the title on a phone. */}
+        <div className={cn('min-w-0 max-w-[40vw] text-center sm:max-w-md', showFullscreenButton && 'max-sm:invisible max-sm:w-0')}>
           <p className="truncate text-body-sm font-semibold text-on-surface">{book.title}</p>
           {location?.chapter && (
             <p className="hidden truncate text-body-sm text-on-surface-variant sm:block">{location.chapter}</p>
@@ -366,6 +405,18 @@ export function Reader({
           >
             <ALargeSmall />
           </Button>
+          {showFullscreenButton && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={pillButton}
+              aria-label={fullscreen.active ? 'Exit full screen' : 'Full screen'}
+              aria-pressed={fullscreen.active}
+              onClick={toggleFullscreen}
+            >
+              {fullscreen.active ? <Minimize /> : <Maximize />}
+            </Button>
+          )}
         </div>
       </header>
 
