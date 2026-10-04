@@ -44,6 +44,7 @@ export default async function ReadPage({ params, searchParams }: Props): Promise
       key={data.book.id}
       book={data.book}
       initialAnnotations={data.annotations}
+      initialBookmarks={data.bookmarks}
       initialPreferences={data.preferences}
       initialDeckOptions={deckOptions}
       startCfi={typeof cfi === 'string' && cfi.startsWith('epubcfi(') ? cfi : null}

@@ -1,7 +1,8 @@
 import { and, asc, count, desc, eq, sql } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { bookAnnotations, bookSections, books } from '@/lib/db/schema';
+import { bookAnnotations, bookBookmarks, bookSections, books } from '@/lib/db/schema';
+import type { BookBookmark } from '@/lib/services/bookmark-service';
 import { deleteBlobs, headBlob, putPrivateBlob, readBlobBytes } from '@/lib/blob';
 import { EPUB_CONTENT_TYPE, MAX_BOOKS_PER_USER, MAX_BOOK_SIZE_BYTES, isOwnBookPathname } from '@/lib/books/limits';
 import { EpubError, parseEpub } from '@/lib/epub/parse';
@@ -37,6 +38,7 @@ export interface ReaderBook {
 export interface ReaderData {
   book: ReaderBook;
   annotations: BookAnnotation[];
+  bookmarks: BookBookmark[];
   preferences: ReaderPreferences;
 }
 
@@ -88,8 +90,9 @@ export async function getReaderData(userId: string, bookId: string): Promise<Rea
   const book = await getOwnedBook(userId, bookId);
   if (book.status !== 'ready') throw new ServiceError('UNAVAILABLE', 'Book is not ready yet');
 
-  const [annotations, preferences] = await Promise.all([
+  const [annotations, bookmarks, preferences] = await Promise.all([
     db.select().from(bookAnnotations).where(eq(bookAnnotations.book_id, bookId)).orderBy(asc(bookAnnotations.created_at)),
+    db.select().from(bookBookmarks).where(eq(bookBookmarks.book_id, bookId)).orderBy(asc(bookBookmarks.progress)),
     getReaderPreferences(userId),
   ]);
 
@@ -106,6 +109,7 @@ export async function getReaderData(userId: string, bookId: string): Promise<Rea
       translate_to: book.translate_to,
     },
     annotations,
+    bookmarks,
     preferences,
   };
 }

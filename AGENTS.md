@@ -204,7 +204,8 @@ export const reminderDeliveries = pgTable('reminder_deliveries', {
 Defined in `src/lib/db/schema.ts` (source of truth): `books` (file in private
 Vercel Blob, reading position as CFI + progress), `book_sections` (plain-text
 version per spine item — input for RAG), `book_annotations` (highlight + optional
-note, anchored by `cfi_range`) and `reader_preferences` (one row per user).
+note, anchored by `cfi_range`), `book_bookmarks` (a marked page, anchored by the CFI of
+the page start, unique per book + CFI) and `reader_preferences` (one row per user).
 Phase 2 adds `card_sources` (card → book + CFI, for "Open in book" in study),
 `translation_cache` (shared, keyed by sha256 of pair + text) and
 `books.translate_from/translate_to` (last language pair per book).

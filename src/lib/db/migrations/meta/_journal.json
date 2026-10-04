@@ -113,6 +113,13 @@
       "when": 1790923618280,
       "tag": "0015_rag_index_fingerprint_and_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791107500750,
+      "tag": "0016_book_bookmarks",
+      "breakpoints": true
     }
   ]
 }

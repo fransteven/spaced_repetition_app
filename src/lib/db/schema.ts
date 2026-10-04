@@ -250,6 +250,20 @@ export const bookAnnotations = pgTable('book_annotations', {
   index('book_annotations_book_idx').on(table.book_id),
 ]);
 
+// A page the reader marked to come back to ("bookmark"), anchored by the CFI of the page start.
+export const bookBookmarks = pgTable('book_bookmarks', {
+  id:            uuid('id').defaultRandom().primaryKey(),
+  book_id:       uuid('book_id').references(() => books.id, { onDelete: 'cascade' }).notNull(),
+  user_id:       uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  cfi:           text('cfi').notNull(),
+  chapter_label: text('chapter_label'),
+  excerpt:       text('excerpt'),                   // opening words of the page, to recognise it in the list
+  progress:      real('progress').notNull().default(0), // 0..1 at the time it was added
+  created_at:    timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('book_bookmarks_book_cfi_idx').on(table.book_id, table.cfi),
+]);
+
 // Where a card came from. Keeps its own copy of the anchor so the link
 // survives deleting the highlight; removing the book drops the link only.
 export const cardSources = pgTable('card_sources', {

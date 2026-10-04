@@ -135,6 +135,14 @@ export const CreateAnnotationSchema = z.object({
   note:          z.string().max(5000).nullable().optional(),
 });
 
+export const CreateBookmarkSchema = z.object({
+  book_id:       z.string().uuid(),
+  cfi:           z.string().min(1).max(2000),
+  chapter_label: z.string().max(300).nullable().optional(),
+  excerpt:       z.string().max(300).nullable().optional(),
+  progress:      z.number().min(0).max(1),
+});
+
 export const UpdateAnnotationSchema = z.object({
   color: HighlightColorSchema.optional(),
   note:  z.string().max(5000).nullable().optional(),

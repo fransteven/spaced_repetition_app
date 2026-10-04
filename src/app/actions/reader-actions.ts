@@ -6,6 +6,7 @@ import {
   BookLocationsSchema,
   CreateAnnotationSchema,
   CreateBookCardSchema,
+  CreateBookmarkSchema,
   ReaderPreferencesSchema,
   ReadingProgressSchema,
   SuggestBookCardSchema,
@@ -26,6 +27,7 @@ import {
   updateAnnotation,
   type BookAnnotation,
 } from '@/lib/services/annotation-service';
+import { createBookmark, deleteBookmark, type BookBookmark } from '@/lib/services/bookmark-service';
 import { updateReaderPreferences } from '@/lib/services/reader-preferences-service';
 import { ServiceError } from '@/lib/services/service-error';
 
@@ -100,6 +102,17 @@ export async function updateAnnotationAction(
 export async function deleteAnnotationAction(annotationId: string): Promise<ActionResult<null>> {
   return run('deleteAnnotationAction', AnnotationIdSchema, { id: annotationId }, async (userId, data) => {
     await deleteAnnotation(userId, data.id);
+    return null;
+  });
+}
+
+export async function createBookmarkAction(input: unknown): Promise<ActionResult<BookBookmark>> {
+  return run('createBookmarkAction', CreateBookmarkSchema, input, createBookmark);
+}
+
+export async function deleteBookmarkAction(bookmarkId: string): Promise<ActionResult<null>> {
+  return run('deleteBookmarkAction', AnnotationIdSchema, { id: bookmarkId }, async (userId, data) => {
+    await deleteBookmark(userId, data.id);
     return null;
   });
 }

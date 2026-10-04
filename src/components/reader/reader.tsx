@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   ALargeSmall,
   ArrowLeft,
+  Bookmark,
   ChevronLeft,
   ChevronRight,
   Highlighter,
@@ -19,10 +20,13 @@ import {
 import { cn } from '@/lib/utils';
 import type { ReaderBook } from '@/lib/services/book-service';
 import type { BookAnnotation } from '@/lib/services/annotation-service';
+import type { BookBookmark } from '@/lib/services/bookmark-service';
 import type { ReaderPreferences } from '@/lib/services/reader-preferences-service';
 import {
   createAnnotationAction,
+  createBookmarkAction,
   deleteAnnotationAction,
+  deleteBookmarkAction,
   saveBookLocationsAction,
   saveReadingProgressAction,
   updateAnnotationAction,
@@ -56,6 +60,7 @@ const PREFS_DEBOUNCE_MS = 600;
 interface ReaderProps {
   book: ReaderBook;
   initialAnnotations: BookAnnotation[];
+  initialBookmarks: BookBookmark[];
   initialPreferences: ReaderPreferences;
   initialDeckOptions: BookDeckOptions;
   startCfi: string | null;
@@ -100,6 +105,7 @@ function sourceFromAnnotation(annotation: BookAnnotation): CardDraftSource {
 export function Reader({
   book,
   initialAnnotations,
+  initialBookmarks,
   initialPreferences,
   initialDeckOptions,
   startCfi,
@@ -108,6 +114,8 @@ export function Reader({
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [preferences, setPreferences] = useState(initialPreferences);
   const [annotations, setAnnotations] = useState(initialAnnotations);
+  const [bookmarks, setBookmarks] = useState(initialBookmarks);
+  const [bookmarkPending, setBookmarkPending] = useState(false);
   const [tokens, setTokens] = useState<ReaderTokens | null>(null);
   const [origin] = useState(() => (typeof window === 'undefined' ? '' : window.location.origin));
   const [location, setLocation] = useState<ReaderLocation | null>(null);
@@ -286,6 +294,41 @@ export function Reader({
     }
   };
 
+  // ── Bookmarks: one per page; the button toggles the bookmark of the page on screen.
+  const pageBookmark = location ? bookmarks.find((item) => reader.isOnPage(item.cfi, location)) ?? null : null;
+
+  const removeBookmark = async (bookmark: BookBookmark): Promise<void> => {
+    setBookmarks((current) => current.filter((item) => item.id !== bookmark.id));
+    const result = await deleteBookmarkAction(bookmark.id);
+    if (result.error) {
+      setBookmarks((current) => [...current, bookmark]);
+      toast.error(result.error.message);
+    }
+  };
+
+  const toggleBookmark = async (): Promise<void> => {
+    if (!location || bookmarkPending) return;
+    if (pageBookmark) {
+      await removeBookmark(pageBookmark);
+      return;
+    }
+    setBookmarkPending(true);
+    const result = await createBookmarkAction({
+      book_id: book.id,
+      cfi: location.cfi,
+      chapter_label: location.chapter,
+      excerpt: reader.pageExcerpt(),
+      progress: location.progress,
+    });
+    setBookmarkPending(false);
+    if (!result.data) {
+      toast.error(result.error?.message ?? 'Could not add bookmark');
+      return;
+    }
+    const created = result.data;
+    setBookmarks((current) => [...current.filter((item) => item.id !== created.id), created]);
+  };
+
   const copyText = async (text: string): Promise<void> => {
     try {
       await navigator.clipboard.writeText(text);
@@ -351,7 +394,8 @@ export function Reader({
           page never re-paginates when chrome toggles. */}
       <header
         className={cn(
-          'grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 transition-opacity duration-200 sm:px-5',
+          // gap-1/px-2 on phones: seven 44 px pills fit in 360 px.
+          'grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 transition-opacity duration-200 sm:gap-3 sm:px-5',
           chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
       >
@@ -373,13 +417,13 @@ export function Reader({
             variant="ghost"
             size="icon"
             className={pillButton}
-            aria-label="Highlights and notes"
+            aria-label="Highlights, notes and bookmarks"
             onClick={() => setPanel('notes')}
           >
             <Highlighter />
           </Button>
         </div>
-        {/* Six 44 px pills leave no room for the title on a phone. */}
+        {/* Seven 44 px pills leave no room for the title on a phone. */}
         <div className={cn('min-w-0 max-w-[40vw] text-center sm:max-w-md', showFullscreenButton && 'max-sm:invisible max-sm:w-0')}>
           <p className="truncate text-body-sm font-semibold text-on-surface">{book.title}</p>
           {location?.chapter && (
@@ -387,6 +431,17 @@ export function Reader({
           )}
         </div>
         <div className={cn(pillGroup, 'justify-self-end')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={pillButton}
+            aria-label={pageBookmark ? 'Remove bookmark' : 'Bookmark this page'}
+            aria-pressed={pageBookmark !== null}
+            disabled={!location || bookmarkPending}
+            onClick={() => void toggleBookmark()}
+          >
+            <Bookmark className={cn(pageBookmark && 'fill-primary text-primary')} />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -419,6 +474,11 @@ export function Reader({
           )}
         </div>
       </header>
+
+      {/* The page stays marked while the chrome is hidden, like a ribbon. */}
+      {pageBookmark && !chromeVisible && (
+        <Bookmark aria-hidden className="pointer-events-none absolute right-6 top-0 size-5 fill-primary text-primary sm:right-10" />
+      )}
 
       {/* Page */}
       <main className="relative flex min-h-0 flex-1 items-stretch">
@@ -564,7 +624,9 @@ export function Reader({
         open={panel === 'notes'}
         onOpenChange={(open) => setPanel(open ? 'notes' : null)}
         annotations={annotations}
+        bookmarks={bookmarks}
         onNavigate={navigate}
+        onDeleteBookmark={(bookmark) => void removeBookmark(bookmark)}
         onEditNote={(annotation) => {
           setPanel(null);
           setNoteTarget(annotation);
