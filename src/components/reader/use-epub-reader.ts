@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Book, Contents, Location, NavItem, Rendition } from 'epubjs';
+import type { Book, Contents, EpubCFI, Location, NavItem, Rendition } from 'epubjs';
 import type Section from 'epubjs/types/section';
 
 import type { BookAnnotation } from '@/lib/services/annotation-service';
@@ -20,9 +20,20 @@ const STYLE_ID = 'nc-reader-style';
 const SWIPE_MIN_PX = 50;
 const TAP_DELAY_MS = 80;
 const FLASH_MS = 2500;
+// Re-layouts (opening the book, full screen, any resize, typography) lose the reader's place: epub.js
+// re-displays the *start* of its current page, and a display() into a section that was just laid out
+// often lands on the section start. So the page the reader chose is held as an anchor: relocations
+// while it is held are layout noise (never reported or saved), and the anchor is displayed again until
+// a relocation actually contains it.
+const RESIZE_SETTLE_MS = 250;
+const ANCHOR_RETRY_MS = 150;
+const ANCHOR_MAX_ATTEMPTS = 4;
+const ANCHOR_RELEASE_MS = 300; // trailing relocations of the successful display
+const ANCHOR_GIVE_UP_MS = 3000;
 
 export interface ReaderLocation {
   cfi: string;
+  endCfi: string; // last position on the page: with `cfi`, what "this page" contains
   href: string; // spine item href of the current page (relative to the OPF)
   progress: number; // 0..1
   page: number | null;
@@ -74,7 +85,13 @@ export interface EpubReader {
   goToPassage: (sectionPath: string, locator: string) => Promise<void>;
   clearSelection: () => void;
   renderHighlights: (annotations: BookAnnotation[], tokens: ReaderTokens) => void;
+  /** Opening words of the current page (for a bookmark), or null. */
+  pageExcerpt: () => string | null;
+  /** True when `cfi` falls on the page described by `location`. */
+  isOnPage: (cfi: string, location: ReaderLocation) => boolean;
 }
+
+const EXCERPT_CHARS = 160;
 
 function flattenToc(items: NavItem[]): NavItem[] {
   return items.flatMap((item) => [item, ...flattenToc(item.subitems ?? [])]);
@@ -82,6 +99,16 @@ function flattenToc(items: NavItem[]): NavItem[] {
 
 function isFullscreenKey(event: KeyboardEvent): boolean {
   return (event.key === 'f' || event.key === 'F') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat;
+}
+
+/** True when `cfi` lies between `start` and `end` (inclusive). Unparseable CFIs count as not contained. */
+function cfiWithin(tool: EpubCFI | null, cfi: string, start: string, end: string): boolean {
+  if (!tool) return cfi === start;
+  try {
+    return tool.compare(cfi, start) >= 0 && tool.compare(cfi, end) <= 0;
+  } catch {
+    return false;
+  }
 }
 
 function stripFragment(href: string): string {
@@ -161,6 +188,10 @@ export function useEpubReader(options: Options): EpubReader {
   const currentCfi = useRef<string | null>(options.initialCfi);
   const tapTimer = useRef<number | undefined>(undefined);
   const flashTokens = useRef<ReaderTokens | null>(null);
+  const cfiTool = useRef<EpubCFI | null>(null);
+  const holdAnchor = useRef(false);
+  const anchorAttempts = useRef(0);
+  const anchorTimer = useRef<number | undefined>(undefined);
 
   // Latest options without re-creating the rendition.
   const latest = useRef(options);
@@ -171,7 +202,9 @@ export function useEpubReader(options: Options): EpubReader {
   const report = useCallback((location: Location): void => {
     const book = bookRef.current;
     if (!book) return;
-    const cfi = location.start.cfi;
+    // While the layout settles, keep reporting (and saving) the page the reader chose, not the drifted one.
+    const anchor = holdAnchor.current ? currentCfi.current : null;
+    const cfi = anchor ?? location.start.cfi;
     currentCfi.current = cfi;
 
     let page: number | null = null;
@@ -188,6 +221,7 @@ export function useEpubReader(options: Options): EpubReader {
 
     latest.current.onRelocated({
       cfi,
+      endCfi: location.end.cfi,
       href: location.start.href,
       progress: Math.min(1, Math.max(0, progress)),
       page,
@@ -198,6 +232,53 @@ export function useEpubReader(options: Options): EpubReader {
     });
   }, []);
 
+  /** The reader navigated on purpose: whatever page comes next is the new position. */
+  const cancelAnchorHold = useCallback((): void => {
+    window.clearTimeout(anchorTimer.current);
+    holdAnchor.current = false;
+    anchorAttempts.current = 0;
+  }, []);
+
+  const releaseAnchorAfter = useCallback((ms: number): void => {
+    window.clearTimeout(anchorTimer.current);
+    anchorTimer.current = window.setTimeout(() => {
+      holdAnchor.current = false;
+      anchorAttempts.current = 0;
+    }, ms);
+  }, []);
+
+  const displayAnchor = useCallback((): void => {
+    const rendition = renditionRef.current;
+    const cfi = currentCfi.current;
+    if (!rendition || !cfi) {
+      cancelAnchorHold();
+      return;
+    }
+    anchorAttempts.current += 1;
+    releaseAnchorAfter(ANCHOR_GIVE_UP_MS); // never hold forever, whatever epub.js does
+    rendition.display(cfi).catch(() => cancelAnchorHold());
+  }, [cancelAnchorHold, releaseAnchorAfter]);
+
+  /** Holds the reader's position through a re-layout and displays it again once the layout settles. */
+  const restoreAnchor = useCallback((delay: number): void => {
+    holdAnchor.current = true;
+    anchorAttempts.current = 0;
+    window.clearTimeout(anchorTimer.current);
+    anchorTimer.current = window.setTimeout(displayAnchor, delay);
+  }, [displayAnchor]);
+
+  /** After a corrective display: done if the page shows the anchor, otherwise try again (bounded). */
+  const checkAnchor = useCallback((location: Location): void => {
+    if (!holdAnchor.current || anchorAttempts.current === 0) return; // still settling; the display comes later
+    const anchor = currentCfi.current;
+    if (anchor && cfiWithin(cfiTool.current, anchor, location.start.cfi, location.end.cfi)) {
+      releaseAnchorAfter(ANCHOR_RELEASE_MS);
+    } else if (anchorAttempts.current < ANCHOR_MAX_ATTEMPTS) {
+      window.clearTimeout(anchorTimer.current);
+      anchorTimer.current = window.setTimeout(displayAnchor, ANCHOR_RETRY_MS);
+    }
+  }, [displayAnchor, releaseAnchorAfter]);
+
   useEffect(() => {
     if (!container) return;
     let cancelled = false;
@@ -207,8 +288,9 @@ export function useEpubReader(options: Options): EpubReader {
       const response = await fetch(`/api/books/${bookId}/file`);
       if (!response.ok) throw new Error(`Could not load book (HTTP ${response.status})`);
       const buffer = await response.arrayBuffer();
-      const { default: ePub } = await import('epubjs');
+      const { default: ePub, EpubCFI: Cfi } = await import('epubjs');
       if (cancelled) return;
+      cfiTool.current = new Cfi();
 
       const book = ePub(buffer);
       bookRef.current = book;
@@ -221,12 +303,19 @@ export function useEpubReader(options: Options): EpubReader {
         allowScriptedContent: false,
       });
       renditionRef.current = rendition;
+      const turn = (target: Rendition, direction: 1 | -1): void => {
+        cancelAnchorHold();
+        void (direction === 1 ? target.next() : target.prev());
+      };
 
       rendition.hooks.content.register((contents: Contents) => {
         applyStyle(contents, latest.current.css, latest.current.language);
       });
 
+      rendition.on('resized', () => restoreAnchor(RESIZE_SETTLE_MS));
+
       rendition.on('relocated', (location: Location) => {
+        checkAnchor(location);
         report(location);
         latest.current.onSelect(null);
       });
@@ -253,15 +342,15 @@ export function useEpubReader(options: Options): EpubReader {
         // Deferred so a click on a highlight (reported separately) can cancel it.
         window.clearTimeout(tapTimer.current);
         tapTimer.current = window.setTimeout(() => {
-          if (ratio < 0.25) void rendition.prev();
-          else if (ratio > 0.75) void rendition.next();
+          if (ratio < 0.25) turn(rendition, -1);
+          else if (ratio > 0.75) turn(rendition, 1);
           else latest.current.onToggleChrome();
         }, TAP_DELAY_MS);
       });
 
       rendition.on('keydown', (event: KeyboardEvent) => {
-        if (event.key === 'ArrowLeft') void rendition.prev();
-        if (event.key === 'ArrowRight') void rendition.next();
+        if (event.key === 'ArrowLeft') turn(rendition, -1);
+        if (event.key === 'ArrowRight') turn(rendition, 1);
         if (isFullscreenKey(event)) latest.current.onToggleFullscreen();
       });
 
@@ -276,16 +365,24 @@ export function useEpubReader(options: Options): EpubReader {
         const dy = touch.screenY - touchStart.y;
         touchStart = null;
         if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy)) return;
-        if (dx < 0) void rendition.next();
-        else void rendition.prev();
+        if (dx < 0) turn(rendition, 1);
+        else turn(rendition, -1);
       });
 
       await book.ready;
       if (cancelled) return;
       setToc(book.navigation?.toc ?? []);
 
+      const initialCfi = latest.current.initialCfi;
       try {
-        await rendition.display(latest.current.initialCfi ?? undefined);
+        await rendition.display(initialCfi ?? undefined);
+        // The first display of a saved position often lands on the chapter start (the section is laid out
+        // after the jump is computed). Hold the saved position so that wrong page is never reported or
+        // saved, and display it again once the layout has settled.
+        if (initialCfi) {
+          currentCfi.current = initialCfi;
+          restoreAnchor(RESIZE_SETTLE_MS);
+        }
       } catch {
         await rendition.display(); // stale CFI → start of book
       }
@@ -315,13 +412,15 @@ export function useEpubReader(options: Options): EpubReader {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(anchorTimer.current);
+      holdAnchor.current = false;
       locationsReady.current = false;
       highlighted.current = [];
       renditionRef.current = null;
       bookRef.current?.destroy();
       bookRef.current = null;
     };
-  }, [bookId, container, report]);
+  }, [bookId, container, report, restoreAnchor, cancelAnchorHold, checkAnchor]);
 
   // Re-style open iframes when the theme or typography changes, then
   // re-anchor so the reader stays on the same passage after re-pagination.
@@ -330,24 +429,26 @@ export function useEpubReader(options: Options): EpubReader {
     const rendition = renditionRef.current;
     if (!rendition || status !== 'ready') return;
     contentsList(rendition).forEach((contents) => applyStyle(contents, css, latest.current.language));
-    const cfi = currentCfi.current;
-    const timer = window.setTimeout(() => {
-      if (cfi) void rendition.display(cfi);
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [css, status]);
+    restoreAnchor(60);
+  }, [css, status, restoreAnchor]);
 
   // Arrow keys (and "f") when focus is outside the iframe.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.target instanceof HTMLElement && event.target.closest('input, textarea, [role="dialog"]')) return;
-      if (event.key === 'ArrowLeft') void renditionRef.current?.prev();
-      if (event.key === 'ArrowRight') void renditionRef.current?.next();
+      if (event.key === 'ArrowLeft') {
+        cancelAnchorHold();
+        void renditionRef.current?.prev();
+      }
+      if (event.key === 'ArrowRight') {
+        cancelAnchorHold();
+        void renditionRef.current?.next();
+      }
       if (isFullscreenKey(event)) latest.current.onToggleFullscreen();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [cancelAnchorHold]);
 
   const renderHighlights = useCallback((annotations: BookAnnotation[], tokens: ReaderTokens): void => {
     const rendition = renditionRef.current;
@@ -409,12 +510,38 @@ export function useEpubReader(options: Options): EpubReader {
       console.error('[reader] passage lookup', error);
     }
 
+    cancelAnchorHold();
     await rendition.display(cfi ?? section.href);
     if (cfi && flashTokens.current) {
       const flashCfi = cfi;
       rendition.annotations.highlight(flashCfi, {}, () => undefined, 'nc-flash', highlightStyles(flashTokens.current, 'yellow'));
       window.setTimeout(() => rendition.annotations.remove(flashCfi, 'highlight'), FLASH_MS);
     }
+  }, [cancelAnchorHold]);
+
+  const pageExcerpt = useCallback((): string | null => {
+    const rendition = renditionRef.current;
+    const current: unknown = rendition?.location;
+    if (!rendition || !current || typeof current !== 'object' || !('start' in current)) return null;
+    const { start, end } = rendition.location;
+    try {
+      const from = rendition.getRange(start.cfi);
+      const to = rendition.getRange(end.cfi);
+      const doc = from?.startContainer.ownerDocument;
+      if (!from || !doc) return null;
+      const range = doc.createRange();
+      range.setStart(from.startContainer, from.startOffset);
+      if (to && to.startContainer.ownerDocument === doc) range.setEnd(to.startContainer, to.startOffset);
+      else range.setEndAfter(doc.body.lastChild ?? from.startContainer);
+      const text = range.toString().replace(/\s+/g, ' ').trim();
+      return text ? text.slice(0, EXCERPT_CHARS) : null;
+    } catch {
+      return null; // a CFI the current layout cannot resolve: the bookmark still works without an excerpt
+    }
+  }, []);
+
+  const isOnPage = useCallback((cfi: string, location: ReaderLocation): boolean => {
+    return cfi === location.cfi || cfiWithin(cfiTool.current, cfi, location.cfi, location.endCfi);
   }, []);
 
   const clearSelection = useCallback((): void => {
@@ -426,11 +553,22 @@ export function useEpubReader(options: Options): EpubReader {
   return {
     status,
     toc,
-    next: useCallback(() => void renditionRef.current?.next(), []),
-    prev: useCallback(() => void renditionRef.current?.prev(), []),
-    display: useCallback((target: string) => void renditionRef.current?.display(target), []),
+    next: useCallback(() => {
+      cancelAnchorHold();
+      void renditionRef.current?.next();
+    }, [cancelAnchorHold]),
+    prev: useCallback(() => {
+      cancelAnchorHold();
+      void renditionRef.current?.prev();
+    }, [cancelAnchorHold]),
+    display: useCallback((target: string) => {
+      cancelAnchorHold();
+      void renditionRef.current?.display(target);
+    }, [cancelAnchorHold]),
     goToPassage,
     clearSelection,
     renderHighlights,
+    pageExcerpt,
+    isOnPage,
   };
 }
