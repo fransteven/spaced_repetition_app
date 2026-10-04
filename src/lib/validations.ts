@@ -227,6 +227,16 @@ export const InternalSearchSchema = z.object({
   limit:       z.number().int().min(1).max(30),
 });
 
+/** Passages of a range of sections in reading order (chapter summary, key terms, "so far"). */
+export const InternalPassagesSchema = z.object({
+  user_id:     z.string().uuid(),
+  book_id:     z.string().uuid(),
+  spine_from:  z.number().int().min(0),
+  spine_to:    z.number().int().min(0).nullable(),
+  spine_limit: z.number().int().min(0).nullable(),
+  max_chunks:  z.number().int().min(1).max(60),
+});
+
 export const BookIdSchema = z.string().uuid();
 
 export const InternalSectionsQuerySchema = z.object({
@@ -255,6 +265,9 @@ export type InternalChunk = z.infer<typeof InternalChunkSchema>;
 
 // ── Reader phase 3: ask the book (RAG) ───────────────────────────────────────
 
+export const ASK_TASKS = ['question', 'chapter_summary', 'key_terms', 'so_far'] as const;
+export type AskTask = (typeof ASK_TASKS)[number];
+
 /** Body of POST /api/books/[id]/ask. The book comes from the path and the user from the session. */
 export const AskRequestSchema = z.object({
   question:      z.string().trim().min(1).max(500),
@@ -264,6 +277,8 @@ export const AskRequestSchema = z.object({
   })).max(12).default([]),
   scope:         z.enum(['read', 'all']),
   position_href: z.string().max(500).nullable().optional(),
+  // Whole-section tasks are answered from the section itself, not from a vector search.
+  task:          z.enum(ASK_TASKS).default('question'),
 });
 
 export const AskBookFormSchema = z.object({

@@ -1,4 +1,4 @@
-import { and, asc, cosineDistance, count, eq, gt, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, cosineDistance, count, eq, gt, gte, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { bookChunks, bookSections, books } from '@/lib/db/schema';
@@ -44,6 +44,7 @@ export interface SearchResult {
 export interface AskContext {
   book: { title: string; author: string | null; language: string | null };
   spine_limit: number | null;
+  current_spine: number | null; // section being read: what "this chapter" means
   index_ready: boolean;
   needs_index: boolean;
 }
@@ -197,6 +198,68 @@ export async function searchBookChunks(
   return { index_status: 'ready', index_fingerprint: book.index_fingerprint, chunks };
 }
 
+/**
+ * Chunks of a range of sections in reading order, evenly sampled down to `max_chunks` so a long
+ * chapter (or everything read so far) is covered end to end. Same ownership and spoiler rules as search.
+ */
+export async function listBookPassages(
+  userId: string,
+  input: { book_id: string; spine_from: number; spine_to: number | null; spine_limit: number | null; max_chunks: number }
+): Promise<SearchResult> {
+  const book = await getOwnedBook(userId, input.book_id);
+  if (book.status !== 'ready') throw new ServiceError('UNAVAILABLE', 'Book is not ready yet');
+  if (book.index_status !== 'ready') {
+    return { index_status: book.index_status, index_fingerprint: book.index_fingerprint, chunks: [] };
+  }
+
+  const bounds = [input.spine_to, input.spine_limit].filter((value): value is number => value !== null);
+  const upper = bounds.length > 0 ? Math.min(...bounds) : null;
+  if (upper !== null && upper < input.spine_from) {
+    return { index_status: 'ready', index_fingerprint: book.index_fingerprint, chunks: [] };
+  }
+
+  // Ids first (cheap), then the text of the sampled ones only.
+  const order = await db
+    .select({ id: bookChunks.id })
+    .from(bookChunks)
+    .where(and(
+      eq(bookChunks.book_id, book.id),
+      gte(bookChunks.spine_index, input.spine_from),
+      upper === null ? undefined : lte(bookChunks.spine_index, upper),
+    ))
+    .orderBy(asc(bookChunks.spine_index), asc(bookChunks.chunk_index));
+  const picked = sampleEvenly(order, input.max_chunks).map((row) => row.id);
+  if (picked.length === 0) return { index_status: 'ready', index_fingerprint: book.index_fingerprint, chunks: [] };
+
+  const chunks = await db
+    .select({
+      id: bookChunks.id,
+      spine_index: bookChunks.spine_index,
+      chunk_index: bookChunks.chunk_index,
+      section_title: bookSections.title,
+      href: bookSections.href,
+      text: bookChunks.text,
+    })
+    .from(bookChunks)
+    .innerJoin(bookSections, eq(bookSections.id, bookChunks.section_id))
+    .where(inArray(bookChunks.id, picked))
+    .orderBy(asc(bookChunks.spine_index), asc(bookChunks.chunk_index));
+
+  return {
+    index_status: 'ready',
+    index_fingerprint: book.index_fingerprint,
+    chunks: chunks.map((chunk) => ({ ...chunk, distance: 0 })),
+  };
+}
+
+/** `count` items spread over the whole list (first and last included), in their original order. */
+function sampleEvenly<T>(items: T[], count: number): T[] {
+  if (items.length <= count) return items;
+  if (count === 1) return [items[0]];
+  const step = (items.length - 1) / (count - 1);
+  return Array.from({ length: count }, (_, index) => items[Math.round(index * step)]);
+}
+
 // ── Asking (called by the public ask route) ──────────────────────────────────
 
 /** True when nothing is indexing it (or the run died) and a new index job should be queued. */
@@ -205,19 +268,25 @@ function needsQueueing(book: Pick<Book, 'index_status' | 'updated_at'>): boolean
   return book.index_status === 'indexing' && Date.now() - book.updated_at.getTime() > INDEX_STALE_MS;
 }
 
-/**
- * Last section the reader may see. With no resolvable position the answer is limited to the first
- * section, never the whole book: an unknown position must not leak spoilers.
- */
-async function spineLimitFor(bookId: string, positionHref: string | null | undefined): Promise<number> {
-  const target = positionHref ? decodeURIComponent(positionHref.split('#')[0]) : '';
-  if (!target) return 0;
+/** Spine index of the section being read (the reader reports its href relative to the OPF), or null. */
+async function currentSpineFor(bookId: string, positionHref: string | null | undefined): Promise<number | null> {
+  const target = positionHref ? safeDecode(positionHref.split('#')[0]) : '';
+  if (!target) return null;
   const sections = await db
     .select({ href: bookSections.href, spine_index: bookSections.spine_index })
     .from(bookSections)
     .where(eq(bookSections.book_id, bookId));
   const match = sections.find((section) => section.href === target || section.href.endsWith(`/${target}`));
-  return match?.spine_index ?? 0;
+  if (!match) console.warn('[getAskContext] reading position does not match any section', { bookId });
+  return match?.spine_index ?? null;
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value; // a literal "%" in a file name
+  }
 }
 
 export async function getAskContext(
@@ -229,9 +298,13 @@ export async function getAskContext(
   if (book.status !== 'ready') throw new ServiceError('UNAVAILABLE', 'Book is not ready yet');
 
   const indexReady = book.index_status === 'ready';
+  const currentSpine = await currentSpineFor(book.id, input.position_href);
   return {
     book: { title: book.title, author: book.author, language: book.language },
-    spine_limit: input.scope === 'read' ? await spineLimitFor(book.id, input.position_href) : null,
+    // With no resolvable position the answer is limited to the first section, never the whole book:
+    // an unknown position must not leak spoilers.
+    spine_limit: input.scope === 'read' ? currentSpine ?? 0 : null,
+    current_spine: currentSpine,
     index_ready: indexReady,
     needs_index: !indexReady && needsQueueing(book),
   };

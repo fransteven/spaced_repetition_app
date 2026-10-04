@@ -352,7 +352,14 @@ book data through internal routes of this app. Both directions use the shared
 | Next → Python | `POST /v1/rag/index` (202) | Index a book in the background (Inngest `book-index`) |
 | Next → Python | `POST /v1/llm/translate` · `/v1/llm/suggest-card` | Single structured-output calls |
 | Python → Next | `POST /api/internal/rag/search` | Vector search for one user's book (ownership + spoiler filter in SQL) |
+| Python → Next | `POST /api/internal/rag/passages` | Chunks of a range of sections in reading order, evenly sampled (chapter summary, key terms, "so far"); same ownership + spoiler rules |
 | Python → Next | `GET …/books/[id]/sections` · `PUT …/chunks` · `POST …/index/begin\|complete\|fail` | Indexing: page sections, upload embedded chunks, claim (compare-and-set) and release the index |
+
+Whole-section requests ("Summarize this chapter", "key terms of this chapter", "main idea so far") are
+not vector searches: the ask body carries `task` (`question` · `chapter_summary` · `key_terms` · `so_far`,
+sent explicitly by the UI suggestions and detected in typed EN/ES questions by `app/rag/intent.py`) and
+Next sends `current_spine` (the section being read). Those tasks read the section through `/passages`
+and skip grading.
 
 Rules: internal routes live under `src/app/api/internal/rag/` and start with
 `rejectUnlessInternal()`; the data side is `src/lib/services/book-index-service.ts`.

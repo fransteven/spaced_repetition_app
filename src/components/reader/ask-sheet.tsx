@@ -8,7 +8,7 @@ import { ArrowUp, BookOpenText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { requestAnswer } from '@/lib/rag/ask-client';
 import type { AskSource, AskStage } from '@/lib/rag/ask-types';
-import { AskBookFormSchema, type AskBookFormValues } from '@/lib/validations';
+import { AskBookFormSchema, type AskBookFormValues, type AskTask } from '@/lib/validations';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,10 +22,11 @@ const INDEX_POLL_LIMIT = 60; // ~5 minutes
 const HISTORY_TURNS = 6;
 const SLOW_START_MS = 4000; // no event by then: the service is probably waking up (free hosting)
 
-const SUGGESTIONS = [
-  'Summarize this chapter',
-  'What is the main idea so far?',
-  'Explain the key terms in this chapter',
+// Whole-section suggestions name their task: a vector search for "Summarize this chapter" cannot find the chapter.
+const SUGGESTIONS: Array<{ label: string; task: AskTask }> = [
+  { label: 'Summarize this chapter', task: 'chapter_summary' },
+  { label: 'What is the main idea so far?', task: 'so_far' },
+  { label: 'Explain the key terms in this chapter', task: 'key_terms' },
 ];
 
 const STAGE_LABELS: Record<AskStage, string> = {
@@ -88,7 +89,7 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [messages, phase, stage]);
 
-  const ask = async ({ question }: AskBookFormValues): Promise<void> => {
+  const ask = async ({ question }: AskBookFormValues, task: AskTask = 'question'): Promise<void> => {
     if (phase !== 'idle') return;
     setError(null);
     const history = messages
@@ -129,7 +130,7 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
       // (cheap while indexing, and not counted against the daily cap) until it is ready.
       for (let attempt = 0; attempt < INDEX_POLL_LIMIT; attempt++) {
         const slowStart = window.setTimeout(() => setStartingService(true), SLOW_START_MS);
-        const outcome = await requestAnswer({ bookId, question, history, scope, positionHref }, handlers, controller.signal).finally(
+        const outcome = await requestAnswer({ bookId, question, history, scope, positionHref, task }, handlers, controller.signal).finally(
           () => {
             window.clearTimeout(slowStart);
             setStartingService(false);
@@ -163,7 +164,7 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
   };
 
   // Built per event (not during render): `ask` reads refs.
-  const submit = (event?: React.BaseSyntheticEvent): Promise<void> => handleSubmit(ask)(event);
+  const submit = (event?: React.BaseSyntheticEvent): Promise<void> => handleSubmit((values) => ask(values))(event);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -190,16 +191,16 @@ export function AskSheet({ open, onOpenChange, bookId, positionHref, onOpenSourc
               <div className="flex flex-wrap gap-2">
                 {SUGGESTIONS.map((suggestion) => (
                   <Button
-                    key={suggestion}
+                    key={suggestion.label}
                     variant="ghost"
                     size="sm"
                     className="h-auto max-w-full shrink whitespace-normal rounded-full bg-surface-container px-3 py-1.5 text-left"
                     onClick={() => {
-                      setValue('question', suggestion);
-                      void submit();
+                      setValue('question', suggestion.label);
+                      void handleSubmit((values) => ask(values, suggestion.task))();
                     }}
                   >
-                    {suggestion}
+                    {suggestion.label}
                   </Button>
                 ))}
               </div>

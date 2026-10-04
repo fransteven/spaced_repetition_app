@@ -71,6 +71,8 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
           question: parsed.data.question,
           history: parsed.data.history.slice(-HISTORY_TURNS),
           spine_limit: context.spine_limit,
+          current_spine: context.current_spine,
+          task: parsed.data.task,
         },
         { signal: request.signal } // the browser closing the stream cancels the run in srs-llm-api
       );

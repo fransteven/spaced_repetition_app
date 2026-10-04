@@ -5,6 +5,7 @@ import {
   type AskStage,
 } from '@/lib/rag/ask-types';
 import { parseAskEvent, readSse } from '@/lib/sse';
+import type { AskTask } from '@/lib/validations';
 
 /** Browser side of "Ask this book": one request to the ask route, reading its event stream. */
 
@@ -19,6 +20,7 @@ export interface AskRequestInput {
   history: AskTurn[];
   scope: 'read' | 'all';
   positionHref: string | null;
+  task?: AskTask;
 }
 
 export interface AskHandlers {
@@ -53,6 +55,7 @@ export async function requestAnswer(
         history: input.history,
         scope: input.scope,
         position_href: input.positionHref,
+        task: input.task ?? 'question',
       }),
       signal,
     });
