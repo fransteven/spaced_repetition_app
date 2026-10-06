@@ -202,9 +202,11 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
 ### Chrome
 - Barra superior: grupos de pills `rounded-full bg-card shadow-ambient` (izq.: volver, índice, notas · der.: ajustes), título centrado en `text-body-sm font-semibold`.
 - Pie: "N of M" en `text-body-sm tabular text-on-surface-variant` + `MasteryThread` corto.
-- Tap al centro oculta/muestra el chrome (conserva el espacio para no re-paginar). Tap en bordes o swipe cambian de página.
+- Tap sobre el texto oculta/muestra el chrome (conserva el espacio para no re-paginar) o cierra la tarjeta de consulta abierta. **Tocar o seleccionar texto nunca cambia de página**: solo lo hacen los márgenes laterales (`w-11` = 44 px en móvil, `sm:w-14`, `lg:w-16`; chevron visible solo en hover) y el swipe (ignorado si hay selección o si empezó con pulsación larga).
+- Selección: mientras hay texto seleccionado el libro no se desplaza. Arrastrar la selección al borde y mantener ~0,6 s pasa la página dentro del capítulo y la selección continúa; soltar antes no mueve nada.
 - Pantalla completa: pill `Maximize`/`Minimize` al final del grupo derecho (o tecla `f`). Usa la Fullscreen API sobre `<html>` (los sheets en portal siguen visibles); al entrar oculta el chrome. En iPhone (sin API) el botón explica "Añadir a pantalla de inicio" (`app/manifest.ts`, `display: standalone`); instalada, el botón desaparece. En < 640 px, con el botón visible, el título cede su espacio.
-- Toolbar de selección: `rounded-2xl bg-popover shadow-ambient-lg animate-pop-in`.
+- Toolbar de selección: `rounded-2xl bg-popover shadow-ambient-lg animate-pop-in`. Se mide con su tamaño de layout y fija su ancho (nunca se parte en dos filas sobre el texto).
+- Tarjeta de consulta (`lookup-panel.tsx`, estilo Kindle): **no modal, sin backdrop ni blur**; el libro y la selección siguen visibles. Móvil: tarjeta `rounded-2xl bg-popover shadow-ambient-lg` de ≤ 45dvh en la mitad opuesta a la selección; ≥ 640 px: columna `w-96` en el lado opuesto. Seleccionar **una sola palabra** la abre con el diccionario (Wiktionary, gratis); la traducción IA espera al botón "Translate to …". Frases: solo toolbar; su botón Traducir abre la misma tarjeta y traduce de inmediato.
 
 ---
 

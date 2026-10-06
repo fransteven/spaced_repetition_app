@@ -184,6 +184,12 @@ export const TranslateFormSchema = z.object({
 
 export type TranslateFormValues = z.infer<typeof TranslateFormSchema>;
 
+// Dictionary lookup of one selected word (GET /api/dictionary).
+export const DictionaryLookupSchema = z.object({
+  word: z.string().trim().min(1).max(48).regex(/^[\p{L}\p{M}\p{N}'’-]+$/u, 'A single word is required'),
+  lang: z.string().trim().max(35).regex(/^[A-Za-z]{2,3}([-_][A-Za-z0-9]+)*$/).nullable().optional(),
+});
+
 export const SuggestBookCardSchema = z.object({
   book_id:       z.string().uuid(),
   quote:         z.string().trim().min(1).max(5000),

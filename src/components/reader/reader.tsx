@@ -47,7 +47,8 @@ import { AnnotationNoteDialog } from '@/components/reader/annotation-note-dialog
 import { AnnotationsSheet } from '@/components/reader/annotations-sheet';
 import { TocSheet } from '@/components/reader/toc-sheet';
 import { ReaderSettingsSheet } from '@/components/reader/reader-settings-sheet';
-import { TranslateSheet } from '@/components/reader/translate-sheet';
+import { LookupPanel, type LookupPlacement } from '@/components/reader/lookup-panel';
+import { lookupWord } from '@/components/reader/reader-gestures';
 import { AskSheet } from '@/components/reader/ask-sheet';
 import { CreateCardDialog, type CardDraftSource } from '@/components/reader/create-card-dialog';
 import type { BookDeckOptions, CreatedBookCard } from '@/lib/services/book-card-service';
@@ -66,7 +67,23 @@ interface ReaderProps {
   startCfi: string | null;
 }
 
-type Panel = 'toc' | 'notes' | 'settings' | 'translate' | 'ask' | null;
+type Panel = 'toc' | 'notes' | 'settings' | 'ask' | null;
+
+/** The non-modal lookup card: a word's dictionary entry and/or a translation. */
+interface Lookup {
+  source: CardDraftSource;
+  word: string | null;
+  autoTranslate: boolean;
+  placement: LookupPlacement;
+}
+
+/** Puts the lookup card in the half (phones) or side (wider screens) away from the text it is about. */
+function placementFor(rect: ViewportRect): LookupPlacement {
+  return {
+    vertical: rect.top + (rect.bottom - rect.top) / 2 > window.innerHeight / 2 ? 'top' : 'bottom',
+    side: rect.left + rect.width / 2 > window.innerWidth / 2 ? 'left' : 'right',
+  };
+}
 
 /** Last pair for this book, else the reader's own language (or Spanish/English). */
 function initialTranslatePair(book: ReaderBook): TranslateFormValues {
@@ -124,10 +141,17 @@ export function Reader({
   const [selection, setSelection] = useState<TextSelection | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<{ id: string; rect: ViewportRect } | null>(null);
   const [noteTarget, setNoteTarget] = useState<BookAnnotation | null>(null);
-  const [translateSource, setTranslateSource] = useState<CardDraftSource | null>(null);
+  const [lookup, setLookup] = useState<Lookup | null>(null);
   const [cardDraft, setCardDraft] = useState<CardDraftSource | null>(null);
   const [deckOptions, setDeckOptions] = useState(initialDeckOptions);
-  const [translatePair] = useState(() => initialTranslatePair(book));
+  const [translatePair, setTranslatePair] = useState(() => initialTranslatePair(book));
+  // Read from callbacks that the epub.js rendition holds on to.
+  const chapterRef = useRef<string | null>(null);
+  const lastCfiRef = useRef<string | null>(null);
+  const lookupOpen = useRef(false);
+  useEffect(() => {
+    lookupOpen.current = lookup !== null;
+  }, [lookup]);
 
   // ── Theme: <html data-reader-theme> re-points tokens for the whole page
   // (including portalled sheets) while the reader is mounted.
@@ -176,6 +200,10 @@ export function Reader({
     (next: ReaderLocation) => {
       setLocation(next);
       setActiveHighlight(null);
+      chapterRef.current = next.chapter;
+      // A new page closes the lookup card (layout re-anchoring reports the same position and keeps it).
+      if (lastCfiRef.current !== null && lastCfiRef.current !== next.cfi) setLookup(null);
+      lastCfiRef.current = next.cfi;
       window.clearTimeout(progressTimer.current);
       progressTimer.current = window.setTimeout(() => {
         void saveReadingProgressAction({ book_id: book.id, cfi: next.cfi, progress: next.progress });
@@ -200,9 +228,26 @@ export function Reader({
     []
   );
 
+  // A settled single-word selection opens the dictionary right away (like Kindle); the translation
+  // waits for its button so a highlight that starts on one word never spends the daily AI cap.
   const handleSelect = useCallback((next: TextSelection | null) => {
     setSelection(next);
-    if (next) setActiveHighlight(null);
+    if (!next) {
+      setLookup((current) => (current?.word && !current.autoTranslate ? null : current));
+      return;
+    }
+    setActiveHighlight(null);
+    const word = lookupWord(next.text);
+    setLookup(
+      word
+        ? {
+            source: sourceFromSelection(next, chapterRef.current),
+            word,
+            autoTranslate: false,
+            placement: placementFor(next.rect),
+          }
+        : null
+    );
   }, []);
 
   const handleHighlightClick = useCallback((id: string, rect: ViewportRect) => {
@@ -210,7 +255,11 @@ export function Reader({
     setActiveHighlight({ id, rect });
   }, []);
 
-  const toggleChrome = useCallback(() => setChromeVisible((visible) => !visible), []);
+  // A tap on the page first closes the lookup card, like tapping outside a popover.
+  const toggleChrome = useCallback(() => {
+    if (lookupOpen.current) setLookup(null);
+    else setChromeVisible((visible) => !visible);
+  }, []);
 
   // ── Fullscreen: entering it hides the chrome (tap the centre to bring it back).
   const fullscreen = useFullscreen(useCallback((active: boolean) => setChromeVisible(!active), []));
@@ -347,10 +396,17 @@ export function Reader({
     setActiveHighlight(null);
   };
 
-  const openTranslate = (source: CardDraftSource): void => {
+  const openTranslate = (source: CardDraftSource, rect: ViewportRect): void => {
     dismissSelection();
-    setTranslateSource(source);
-    setPanel('translate');
+    setLookup({ source, word: lookupWord(source.quote), autoTranslate: true, placement: placementFor(rect) });
+  };
+
+  const closeLookup = useCallback(() => setLookup(null), []);
+
+  const turnPage = (direction: 1 | -1): void => {
+    setLookup(null);
+    if (direction === 1) reader.next();
+    else reader.prev();
   };
 
   const openCard = (source: CardDraftSource): void => {
@@ -480,29 +536,20 @@ export function Reader({
         <Bookmark aria-hidden className="pointer-events-none absolute right-6 top-0 size-5 fill-primary text-primary sm:right-10" />
       )}
 
-      {/* Page */}
+      {/* Page. Only the side margins (and swipes) turn pages: a tap on the text never does, so
+          selecting a word near the edge can't flip the page. 44 px on phones = minimum touch target. */}
       <main className="relative flex min-h-0 flex-1 items-stretch">
         <button
           type="button"
           aria-label="Previous page"
-          onClick={reader.prev}
+          data-testid="page-prev"
+          onClick={() => turnPage(-1)}
           disabled={location?.atStart}
-          className="hidden w-16 shrink-0 items-center justify-center text-on-surface-variant opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 disabled:invisible lg:flex"
+          className="group flex w-11 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible sm:w-14 lg:w-16"
         >
-          <ChevronLeft className="size-6" />
+          <ChevronLeft className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
         </button>
-        {/* Clicks on the side gutters (outside the iframe) still turn pages —
-            that's exactly where a thumb taps on a phone. */}
-        <div
-          className="relative min-w-0 flex-1 px-6 py-2 sm:px-12 lg:px-4"
-          onClick={(event) => {
-            if (event.target !== event.currentTarget) return;
-            const bounds = event.currentTarget.getBoundingClientRect();
-            const ratio = (event.clientX - bounds.left) / bounds.width;
-            if (ratio < 0.25) reader.prev();
-            else if (ratio > 0.75) reader.next();
-          }}
-        >
+        <div className="relative min-w-0 flex-1 py-2">
           <div ref={setContainer} className={cn('h-full w-full', status !== 'ready' && 'invisible')} />
           {status !== 'ready' && (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -515,17 +562,18 @@ export function Reader({
         <button
           type="button"
           aria-label="Next page"
-          onClick={reader.next}
+          data-testid="page-next"
+          onClick={() => turnPage(1)}
           disabled={location?.atEnd}
-          className="hidden w-16 shrink-0 items-center justify-center text-on-surface-variant opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 disabled:invisible lg:flex"
+          className="group flex w-11 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible sm:w-14 lg:w-16"
         >
-          <ChevronRight className="size-6" />
+          <ChevronRight className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
         </button>
       </main>
 
       {/* Footer — page position, like Apple Books */}
       <footer className="flex h-12 shrink-0 flex-col items-center justify-center gap-1.5 px-4">
-        <p className="text-body-sm tabular text-on-surface-variant" aria-live="polite">
+        <p className="text-body-sm tabular text-on-surface-variant" aria-live="polite" data-testid="page-label">
           {pageLabel}
         </p>
         <MasteryThread
@@ -540,7 +588,7 @@ export function Reader({
         <SelectionToolbar
           rect={selection.rect}
           onColor={(color) => void createHighlight(color)}
-          onTranslate={() => openTranslate(sourceFromSelection(selection, location?.chapter ?? null))}
+          onTranslate={() => openTranslate(sourceFromSelection(selection, location?.chapter ?? null), selection.rect)}
           onCard={() => openCard(sourceFromSelection(selection, location?.chapter ?? null))}
           onNote={async () => {
             const created = await createHighlight('yellow');
@@ -558,7 +606,7 @@ export function Reader({
             setActiveHighlight(null);
             void patchAnnotation(active.id, { color });
           }}
-          onTranslate={() => openTranslate(sourceFromAnnotation(active))}
+          onTranslate={() => openTranslate(sourceFromAnnotation(active), activeHighlight.rect)}
           onCard={() => openCard(sourceFromAnnotation(active))}
           onNote={() => {
             setActiveHighlight(null);
@@ -589,18 +637,24 @@ export function Reader({
         />
       )}
 
-      <TranslateSheet
-        open={panel === 'translate'}
-        onOpenChange={(open) => setPanel(open ? 'translate' : null)}
-        bookId={book.id}
-        passage={translateSource ? { text: translateSource.quote, context: translateSource.context } : null}
-        initialPair={translatePair}
-        onCreateCard={(translation) => {
-          if (!translateSource) return;
-          setPanel(null);
-          setCardDraft({ ...translateSource, translation });
-        }}
-      />
+      {lookup && (
+        <LookupPanel
+          bookId={book.id}
+          bookLanguage={book.language}
+          passage={{ text: lookup.source.quote, context: lookup.source.context }}
+          word={lookup.word}
+          autoTranslate={lookup.autoTranslate}
+          placement={lookup.placement}
+          pair={translatePair}
+          onPairChange={setTranslatePair}
+          onCreateCard={(translation) => {
+            dismissSelection();
+            setLookup(null);
+            setCardDraft({ ...lookup.source, translation });
+          }}
+          onClose={closeLookup}
+        />
+      )}
 
       <AskSheet
         open={panel === 'ask'}

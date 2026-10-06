@@ -34,18 +34,22 @@ export function SelectionToolbar({
   onDelete,
 }: SelectionToolbarProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Above the selection when there is room, otherwise below; clamped to the viewport.
+  // Above the selection when there is room, otherwise below; clamped to the viewport. The measured
+  // width is pinned: moved next to the screen edge, the toolbar would otherwise wrap onto a second
+  // row, grow taller than measured and cover the very text it is about.
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
-    const { width, height } = node.getBoundingClientRect();
+    // Layout size, not getBoundingClientRect(): the pop-in animation scales the toolbar while it opens.
+    const width = node.offsetWidth + 1;
+    const height = node.offsetHeight;
     const above = rect.top - height - GAP;
     const top = above >= EDGE ? above : Math.min(rect.bottom + GAP, window.innerHeight - height - EDGE);
     const centered = rect.left + rect.width / 2 - width / 2;
     const left = Math.min(Math.max(centered, EDGE), window.innerWidth - width - EDGE);
-    setPosition({ top, left });
+    setPosition({ top, left, width });
   }, [rect]);
 
   return (
@@ -55,7 +59,7 @@ export function SelectionToolbar({
       aria-label="Selection actions"
       onMouseDown={(event) => event.preventDefault()}
       className="fixed z-40 flex max-w-[calc(100vw-1rem)] animate-pop-in flex-wrap items-center justify-center gap-1 rounded-2xl bg-popover p-1.5 text-popover-foreground shadow-ambient-lg"
-      style={position ? { top: position.top, left: position.left } : { top: -9999, left: -9999 }}
+      style={position ? { top: position.top, left: position.left, width: position.width } : { top: -9999, left: EDGE }}
     >
       <div className="mr-1 rounded-full bg-surface-container px-0.5">
         <HighlightSwatches active={activeColor} onPick={onColor} />

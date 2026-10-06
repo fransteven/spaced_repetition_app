@@ -6,6 +6,20 @@ import type Section from 'epubjs/types/section';
 
 import type { BookAnnotation } from '@/lib/services/annotation-service';
 import { highlightStyles, type ReaderTokens } from '@/components/reader/reader-theme';
+import {
+  EDGE_ACTIVE_MS,
+  EDGE_HOLD_MS,
+  TOUCH_SLOP_PX,
+  canTurnWithinSection,
+  edgePushAllowed,
+  edgePushReady,
+  recordEdgePush,
+  swipeDirection,
+  type EdgePush,
+  type LastEdgeTurn,
+  type PageDirection,
+} from '@/components/reader/reader-gestures';
+import { sanitizeSection } from '@/components/reader/sanitize-section';
 
 /**
  * use-epub-reader.ts — owns the epub.js Book/Rendition lifecycle.
@@ -17,8 +31,12 @@ import { highlightStyles, type ReaderTokens } from '@/components/reader/reader-t
 
 const LOCATION_CHARS = 1600; // ≈ one printed page; stable across font sizes
 const STYLE_ID = 'nc-reader-style';
-const SWIPE_MIN_PX = 50;
 const TAP_DELAY_MS = 80;
+// A selection is reported once it stops changing and the finger is up, so the toolbar
+// and the lookup panel never jump around while a handle is being dragged.
+const SELECTION_SETTLE_MS = 350;
+const SELECTION_AFTER_POINTER_UP_MS = 120;
+const EDGE_POLL_MS = 50;
 const FLASH_MS = 2500;
 // Re-layouts (opening the book, full screen, any resize, typography) lose the reader's place: epub.js
 // re-displays the *start* of its current page, and a display() into a section that was just laid out
@@ -59,6 +77,7 @@ export interface TextSelection {
 
 interface Callbacks {
   onRelocated: (location: ReaderLocation) => void;
+  /** A settled selection, or null while there is none or it is still being dragged. */
   onSelect: (selection: TextSelection | null) => void;
   onHighlightClick: (annotationId: string, rect: ViewportRect) => void;
   onToggleChrome: () => void;
@@ -158,6 +177,24 @@ function toViewportRect(range: Range): ViewportRect | null {
   };
 }
 
+/** True when the selection runs from anchor to focus in document order (the focus is its end). */
+function isForward(selection: Selection, doc: Document): boolean {
+  if (!selection.anchorNode || !selection.focusNode) return true;
+  const probe = doc.createRange();
+  probe.setStart(selection.anchorNode, selection.anchorOffset);
+  probe.setEnd(selection.focusNode, selection.focusOffset); // collapses when the focus comes first
+  return !probe.collapsed || (selection.anchorNode === selection.focusNode && selection.anchorOffset <= selection.focusOffset);
+}
+
+/** Viewport x of the selection's moving end (its focus). */
+function focusX(range: Range, forward: boolean): number | null {
+  const frame = range.startContainer.ownerDocument?.defaultView?.frameElement;
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
+  const edge = forward ? rects.at(-1) : rects[0];
+  if (!frame || !edge) return null;
+  return frame.getBoundingClientRect().left + (forward ? edge.right : edge.left);
+}
+
 const BLOCK_SELECTOR = 'p, li, blockquote, dd, dt, td, figcaption, h1, h2, h3, h4, h5, h6';
 const CONTEXT_MAX_CHARS = 1500;
 
@@ -192,6 +229,20 @@ export function useEpubReader(options: Options): EpubReader {
   const holdAnchor = useRef(false);
   const anchorAttempts = useRef(0);
   const anchorTimer = useRef<number | undefined>(undefined);
+  // Selection state. While text is selected the book must not move under the finger: the browser's own
+  // autoscroll (dragging a handle to the page edge) is undone, and only a sustained push turns the page.
+  const scroller = useRef<HTMLElement | null>(null);
+  const selectionActive = useRef(false);
+  const selectionReported = useRef(false);
+  const pageLeft = useRef(0);
+  const edgeTurning = useRef(false);
+  const edgePush = useRef<EdgePush | null>(null);
+  const lastEdgeTurn = useRef<LastEdgeTurn | null>(null);
+  const edgeTimer = useRef<number | undefined>(undefined);
+  const settleTimer = useRef<number | undefined>(undefined);
+  const pointerDown = useRef(false);
+  const pointerSide = useRef<PageDirection | null>(null); // the finger/mouse is past this page edge
+  const pageDelta = useRef(0); // scroll distance of one page turn (epub.js layout delta)
 
   // Latest options without re-creating the rendition.
   const latest = useRef(options);
@@ -279,10 +330,188 @@ export function useEpubReader(options: Options): EpubReader {
     }
   }, [displayAnchor, releaseAnchorAfter]);
 
+  // ── Selection ───────────────────────────────────────────────────────────
+  const selectionContents = useRef<Contents | null>(null);
+  const ignoreSelectionChange = useRef(false);
+  const touchSelectionChanged = useRef(false);
+
+  /** Visible page box (the epub.js scroller), in viewport coordinates. */
+  const pageBox = useCallback((): DOMRect | null => scroller.current?.getBoundingClientRect() ?? null, []);
+
+  /** Which side of the page the selection's moving end has left through, if any. */
+  const focusOutside = useCallback((contents: Contents): PageDirection | null => {
+    const selection = contents.window.getSelection();
+    const box = pageBox();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !box) return null;
+    const forward = isForward(selection, contents.document);
+    const x = focusX(selection.getRangeAt(0), forward);
+    if (x === null) return null;
+    if (forward && x > box.right + 1) return 1;
+    if (!forward && x < box.left - 1) return -1;
+    return null;
+  }, [pageBox]);
+
+  /** Pulls the moving end back onto the page: text the reader cannot see is never part of the selection. */
+  const clampToPage = useCallback((contents: Contents): void => {
+    const rendition = renditionRef.current;
+    const selection = contents.window.getSelection();
+    const side = focusOutside(contents);
+    const current: unknown = rendition?.location;
+    if (!rendition || !selection || !side || !current || typeof current !== 'object' || !('start' in current)) return;
+    try {
+      const edge = rendition.getRange(side === 1 ? rendition.location.end.cfi : rendition.location.start.cfi);
+      if (!edge || edge.startContainer.ownerDocument !== contents.document) return;
+      ignoreSelectionChange.current = true;
+      selection.extend(edge.startContainer, edge.startOffset);
+    } catch {
+      ignoreSelectionChange.current = false; // a CFI this layout cannot resolve: keep the selection as it is
+    }
+  }, [focusOutside]);
+
+  /** Forgets the selection and stops guarding the page (the DOM selection is left alone). */
+  const endSelection = useCallback((): void => {
+    selectionActive.current = false;
+    selectionContents.current = null;
+    edgePush.current = null;
+    window.clearTimeout(edgeTimer.current);
+    edgeTimer.current = undefined;
+    window.clearTimeout(settleTimer.current);
+    if (selectionReported.current) {
+      selectionReported.current = false;
+      latest.current.onSelect(null);
+    }
+  }, []);
+
+  const reportSelection = useCallback((contents: Contents): void => {
+    const selection = contents.window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+    clampToPage(contents);
+    const range = selection.getRangeAt(0);
+    const text = range.toString().trim();
+    const rect = toViewportRect(range);
+    if (!text || !rect) return;
+    let cfiRange: string;
+    try {
+      cfiRange = contents.cfiFromRange(range);
+    } catch {
+      return;
+    }
+    selectionReported.current = true;
+    latest.current.onSelect({ cfiRange, text, context: contextFor(range, text), rect });
+  }, [clampToPage]);
+
+  /** Reports the selection once it is still, the finger is up and no edge push is pending. */
+  const scheduleReport = useCallback((delay: number): void => {
+    window.clearTimeout(settleTimer.current);
+    settleTimer.current = window.setTimeout(() => {
+      const contents = selectionContents.current;
+      if (!contents || !selectionActive.current || pointerDown.current || edgePush.current) return;
+      reportSelection(contents);
+    }, delay);
+  }, [reportSelection]);
+
+  const handleSelectionChange = useCallback((contents: Contents): void => {
+    if (ignoreSelectionChange.current) {
+      ignoreSelectionChange.current = false;
+      return;
+    }
+    const selection = contents.window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      if (selectionActive.current) endSelection();
+      return;
+    }
+    if (!selectionActive.current) {
+      selectionActive.current = true;
+      pageLeft.current = scroller.current?.scrollLeft ?? 0;
+    }
+    selectionContents.current = contents;
+    touchSelectionChanged.current = true;
+    // Hide the toolbar (and the lookup) while the selection is still moving.
+    if (selectionReported.current) {
+      selectionReported.current = false;
+      latest.current.onSelect(null);
+    }
+    scheduleReport(SELECTION_SETTLE_MS);
+  }, [endSelection, scheduleReport]);
+
+  /** Turns the page under a selection, inside its section (the selection lives in that section's iframe). */
+  const turnAtEdge = useCallback(async (direction: PageDirection): Promise<void> => {
+    const rendition = renditionRef.current;
+    const element = scroller.current;
+    const current: unknown = rendition?.location;
+    if (!rendition || !element || !current || typeof current !== 'object' || !('start' in current)) return;
+    const { start, end } = rendition.location;
+    const pages = { startPage: start.displayed.page, endPage: end.displayed.page, total: end.displayed.total };
+    if (!canTurnWithinSection(direction, pages)) return;
+    edgeTurning.current = true;
+    lastEdgeTurn.current = { direction, at: Date.now() };
+    cancelAnchorHold();
+    // The exact page the turn lands on: autoscroll that sneaks in during the turn must not shift it.
+    const target = pageDelta.current > 0 ? pageLeft.current + direction * pageDelta.current : null;
+    try {
+      await (direction === 1 ? rendition.next() : rendition.prev());
+    } finally {
+      if (target !== null && element.scrollLeft !== target) element.scrollLeft = target;
+      pageLeft.current = element.scrollLeft;
+      edgeTurning.current = false;
+    }
+  }, [cancelAnchorHold]);
+
+  /**
+   * The browser tried to scroll the book toward `direction` while a selection was being dragged (its handle
+   * is at the page edge). Held long enough, that turns the page; let go earlier, nothing moves.
+   */
+  const pushEdge = useCallback((direction: PageDirection): void => {
+    const now = Date.now();
+    if (!edgePushAllowed(direction, lastEdgeTurn.current, now)) return;
+    edgePush.current = recordEdgePush(edgePush.current, direction, now);
+    if (edgeTimer.current !== undefined) return;
+    const check = (): void => {
+      edgeTimer.current = undefined;
+      const push = edgePush.current;
+      const contents = selectionContents.current;
+      if (!push || !contents || !selectionActive.current) return;
+      const at = Date.now();
+      // A finger held still past the edge keeps pushing even when the browser stops autoscrolling.
+      const held = pointerSide.current === push.direction || focusOutside(contents) === push.direction;
+      if (pointerDown.current && held) edgePush.current = { ...push, lastAt: at };
+      const live = edgePush.current;
+      if (live && edgePushReady(live, at)) {
+        edgePush.current = null;
+        void turnAtEdge(live.direction).then(() => scheduleReport(SELECTION_SETTLE_MS));
+        return;
+      }
+      if (!live || at - live.lastAt > EDGE_ACTIVE_MS) {
+        edgePush.current = null; // let go before the hold elapsed: the page stays
+        scheduleReport(SELECTION_AFTER_POINTER_UP_MS);
+        return;
+      }
+      edgeTimer.current = window.setTimeout(check, Math.max(EDGE_POLL_MS, live.startedAt + EDGE_HOLD_MS - at));
+    };
+    edgeTimer.current = window.setTimeout(check, EDGE_POLL_MS);
+  }, [focusOutside, scheduleReport, turnAtEdge]);
+
+  /** Undoes any scroll of the book that the reader did not ask for while text is selected. */
+  const guardScroll = useCallback((): void => {
+    const element = scroller.current;
+    if (!element || !selectionActive.current || edgeTurning.current) return;
+    const delta = element.scrollLeft - pageLeft.current;
+    if (Math.abs(delta) < 1) return;
+    element.scrollLeft = pageLeft.current;
+    pushEdge(delta > 0 ? 1 : -1);
+  }, [pushEdge]);
+
+  const clearSelection = useCallback((): void => {
+    endSelection();
+    const rendition = renditionRef.current;
+    if (!rendition) return;
+    contentsList(rendition).forEach((contents) => contents.window.getSelection()?.removeAllRanges());
+  }, [endSelection]);
+
   useEffect(() => {
     if (!container) return;
     let cancelled = false;
-    let touchStart: { x: number; y: number } | null = null;
+    let touchStart: { x: number; y: number; at: number; movedAt: number | null } | null = null;
 
     const init = async (): Promise<void> => {
       const response = await fetch(`/api/books/${bookId}/file`);
@@ -300,52 +529,69 @@ export function useEpubReader(options: Options): EpubReader {
         flow: 'paginated',
         spread: 'auto',
         minSpreadWidth: 1000,
-        allowScriptedContent: false,
+        // Required for WebKit to deliver taps and selections to our listeners; the book's own code
+        // never runs (see sanitize-section.ts, registered below before any section is displayed).
+        allowScriptedContent: true,
       });
       renditionRef.current = rendition;
-      const turn = (target: Rendition, direction: 1 | -1): void => {
+      const turn = (target: Rendition, direction: PageDirection): void => {
         cancelAnchorHold();
+        clearSelection();
         void (direction === 1 ? target.next() : target.prev());
       };
 
       rendition.hooks.content.register((contents: Contents) => {
         applyStyle(contents, latest.current.css, latest.current.language);
+        const doc = contents.document;
+        // Our own selection pipeline (epub.js's "selected" fires mid-drag and knows nothing about the finger).
+        doc.addEventListener('selectionchange', () => handleSelectionChange(contents));
+        doc.addEventListener('pointerdown', () => {
+          pointerDown.current = true;
+        });
+        // Dragging a selection (mouse, or long-press then drag) past the side of the page: browsers don't
+        // always autoscroll the book for that, so the pointer position itself counts as a push.
+        doc.addEventListener('pointermove', (event: PointerEvent) => {
+          const frameElement = contents.window.frameElement;
+          const box = pageBox();
+          if (!pointerDown.current || !selectionActive.current || !frameElement || !box) return;
+          const x = frameElement.getBoundingClientRect().left + event.clientX;
+          pointerSide.current = x > box.right ? 1 : x < box.left ? -1 : null;
+          if (pointerSide.current) pushEdge(pointerSide.current);
+        });
+        const release = (): void => {
+          pointerDown.current = false;
+          pointerSide.current = null;
+          if (selectionActive.current && !selectionReported.current) scheduleReport(SELECTION_AFTER_POINTER_UP_MS);
+        };
+        doc.addEventListener('pointerup', release);
+        doc.addEventListener('pointercancel', release);
       });
 
-      rendition.on('resized', () => restoreAnchor(RESIZE_SETTLE_MS));
+      rendition.on('layout', (props: unknown) => {
+        if (props && typeof props === 'object' && 'delta' in props && typeof props.delta === 'number') {
+          pageDelta.current = props.delta;
+        }
+      });
+
+      rendition.on('resized', () => {
+        clearSelection(); // the layout moves under it
+        restoreAnchor(RESIZE_SETTLE_MS);
+      });
 
       rendition.on('relocated', (location: Location) => {
         checkAnchor(location);
         report(location);
-        latest.current.onSelect(null);
+        if (!selectionActive.current) latest.current.onSelect(null);
       });
 
-      rendition.on('selected', (cfiRange: string) => {
-        const range = rendition.getRange(cfiRange);
-        const text = range?.toString().trim();
-        const rect = range ? toViewportRect(range) : null;
-        if (!range || !text || !rect) return;
-        latest.current.onSelect({ cfiRange, text, context: contextFor(range, text), rect });
-      });
-
+      // A tap on the text never turns the page (only the side margins and swipes do): it toggles the chrome.
       rendition.on('click', (event: MouseEvent, contents: Contents) => {
         const selection = contents.window.getSelection();
         if (selection && !selection.isCollapsed) return;
-        latest.current.onSelect(null);
         if (event.target instanceof Element && event.target.closest('a')) return;
-
-        const frame = contents.window.frameElement;
-        const bounds = container.getBoundingClientRect();
-        if (!frame || bounds.width === 0) return;
-        const x = frame.getBoundingClientRect().left + event.clientX - bounds.left;
-        const ratio = x / bounds.width;
         // Deferred so a click on a highlight (reported separately) can cancel it.
         window.clearTimeout(tapTimer.current);
-        tapTimer.current = window.setTimeout(() => {
-          if (ratio < 0.25) turn(rendition, -1);
-          else if (ratio > 0.75) turn(rendition, 1);
-          else latest.current.onToggleChrome();
-        }, TAP_DELAY_MS);
+        tapTimer.current = window.setTimeout(() => latest.current.onToggleChrome(), TAP_DELAY_MS);
       });
 
       rendition.on('keydown', (event: KeyboardEvent) => {
@@ -356,21 +602,36 @@ export function useEpubReader(options: Options): EpubReader {
 
       rendition.on('touchstart', (event: TouchEvent) => {
         const touch = event.changedTouches[0];
-        touchStart = touch ? { x: touch.screenX, y: touch.screenY } : null;
+        touchStart =
+          touch && event.touches.length === 1 ? { x: touch.screenX, y: touch.screenY, at: Date.now(), movedAt: null } : null;
+        touchSelectionChanged.current = false;
+      });
+      rendition.on('touchmove', (event: TouchEvent) => {
+        const touch = event.changedTouches[0];
+        if (!touch || !touchStart || touchStart.movedAt !== null) return;
+        const moved = Math.hypot(touch.screenX - touchStart.x, touch.screenY - touchStart.y);
+        if (moved > TOUCH_SLOP_PX) touchStart.movedAt = Date.now();
       });
       rendition.on('touchend', (event: TouchEvent) => {
         const touch = event.changedTouches[0];
         if (!touch || !touchStart) return;
-        const dx = touch.screenX - touchStart.x;
-        const dy = touch.screenY - touchStart.y;
+        const direction = swipeDirection({
+          dx: touch.screenX - touchStart.x,
+          dy: touch.screenY - touchStart.y,
+          holdMs: (touchStart.movedAt ?? Date.now()) - touchStart.at,
+          selectionChanged: touchSelectionChanged.current,
+          selectionActive: selectionActive.current,
+        });
         touchStart = null;
-        if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy)) return;
-        if (dx < 0) turn(rendition, 1);
-        else turn(rendition, -1);
+        if (direction) turn(rendition, direction);
       });
 
       await book.ready;
       if (cancelled) return;
+      // After book.ready, so it runs after epub.js swaps resource URLs (that hook rewrites the output).
+      book.spine.hooks.serialize.register((_output: string, section: Section) => {
+        section.output = sanitizeSection(section.output);
+      });
       setToc(book.navigation?.toc ?? []);
 
       const initialCfi = latest.current.initialCfi;
@@ -387,6 +648,12 @@ export function useEpubReader(options: Options): EpubReader {
         await rendition.display(); // stale CFI → start of book
       }
       if (cancelled) return;
+      // epub.js pages by scrolling this element horizontally; guard it while text is selected.
+      const element = container.querySelector<HTMLElement>('.epub-container');
+      if (element) {
+        scroller.current = element;
+        element.addEventListener('scroll', guardScroll);
+      }
       setStatus('ready');
 
       // Page numbers: reuse cached locations or generate them once.
@@ -413,6 +680,9 @@ export function useEpubReader(options: Options): EpubReader {
     return () => {
       cancelled = true;
       window.clearTimeout(anchorTimer.current);
+      endSelection();
+      scroller.current?.removeEventListener('scroll', guardScroll);
+      scroller.current = null;
       holdAnchor.current = false;
       locationsReady.current = false;
       highlighted.current = [];
@@ -420,7 +690,21 @@ export function useEpubReader(options: Options): EpubReader {
       bookRef.current?.destroy();
       bookRef.current = null;
     };
-  }, [bookId, container, report, restoreAnchor, cancelAnchorHold, checkAnchor]);
+  }, [
+    bookId,
+    container,
+    report,
+    restoreAnchor,
+    cancelAnchorHold,
+    checkAnchor,
+    clearSelection,
+    endSelection,
+    guardScroll,
+    handleSelectionChange,
+    pageBox,
+    pushEdge,
+    scheduleReport,
+  ]);
 
   // Re-style open iframes when the theme or typography changes, then
   // re-anchor so the reader stays on the same passage after re-pagination.
@@ -438,17 +722,19 @@ export function useEpubReader(options: Options): EpubReader {
       if (event.target instanceof HTMLElement && event.target.closest('input, textarea, [role="dialog"]')) return;
       if (event.key === 'ArrowLeft') {
         cancelAnchorHold();
+        clearSelection();
         void renditionRef.current?.prev();
       }
       if (event.key === 'ArrowRight') {
         cancelAnchorHold();
+        clearSelection();
         void renditionRef.current?.next();
       }
       if (isFullscreenKey(event)) latest.current.onToggleFullscreen();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [cancelAnchorHold]);
+  }, [cancelAnchorHold, clearSelection]);
 
   const renderHighlights = useCallback((annotations: BookAnnotation[], tokens: ReaderTokens): void => {
     const rendition = renditionRef.current;
@@ -544,23 +830,20 @@ export function useEpubReader(options: Options): EpubReader {
     return cfi === location.cfi || cfiWithin(cfiTool.current, cfi, location.cfi, location.endCfi);
   }, []);
 
-  const clearSelection = useCallback((): void => {
-    const rendition = renditionRef.current;
-    if (!rendition) return;
-    contentsList(rendition).forEach((contents) => contents.window.getSelection()?.removeAllRanges());
-  }, []);
 
   return {
     status,
     toc,
     next: useCallback(() => {
       cancelAnchorHold();
+      clearSelection();
       void renditionRef.current?.next();
-    }, [cancelAnchorHold]),
+    }, [cancelAnchorHold, clearSelection]),
     prev: useCallback(() => {
       cancelAnchorHold();
+      clearSelection();
       void renditionRef.current?.prev();
-    }, [cancelAnchorHold]),
+    }, [cancelAnchorHold, clearSelection]),
     display: useCallback((target: string) => {
       cancelAnchorHold();
       void renditionRef.current?.display(target);

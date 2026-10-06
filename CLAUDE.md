@@ -10,9 +10,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev      # dev server
 npm run build    # production build
 npm run lint     # eslint
+npm test         # vitest (unit: src/**/*.test.ts)
+npm run test:e2e # playwright (e2e/): builds into .next-e2e, serves :3100, Neon branch "e2e" from .env.test
 ```
 
-No test runner is configured.
+E2E needs `.env.test` (gitignored) with the `e2e` branch `DATABASE_URL` and `E2E_ALLOW_DB_WRITES=1`;
+it never uses `.env.local`'s database. Projects: android-chrome (Pixel 7), iphone-safari (WebKit), desktop-chrome.
 
 ## Architecture
 

@@ -217,6 +217,12 @@ LLM calls). Chunks are written by the srs-llm-api service through the internal A
 (§6.5), never directly.
 Plans: `docs/plans/epub-reader-fase-1.md` … `epub-reader-fase-3-langgraph.md`.
 
+Reader iframe: epub.js renders with `allowScriptedContent: true` because WebKit (all iOS browsers,
+Safari) delivers no events to a sandboxed frame without `allow-scripts`. Every section therefore
+goes through `sanitizeSection()` (`src/components/reader/sanitize-section.ts`: removes scripts,
+frames, `on*` handlers and script URLs, and adds a `script-src 'none'` CSP). NEVER remove that hook;
+`e2e/reader-security.spec.ts` checks a hostile EPUB stays inert.
+
 ### 4.3 Migration commands
 
 ```bash
@@ -331,6 +337,7 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `PATCH /api/books/[id]` | `{ title?, author? }` | Verify ownership |
 | `DELETE /api/books/[id]` | — | Deletes blobs, then the row (cascades) |
 | `GET /api/books/[id]/file` · `/cover` | — | Streams the private blob after an ownership check |
+| `GET /api/dictionary?word=&lang=` | — | Reader lookup: en.wiktionary definitions of one word (free, cached; no LLM call) |
 | `POST /api/books/[id]/ask` | `{ question, history?, scope: 'read'\|'all', position_href? }` | "Ask this book": SSE stream from srs-llm-api (§6.5). `202 {status:'indexing'}` while the book is being indexed |
 
 Reader mutations (progress, locations cache, annotations, preferences,
