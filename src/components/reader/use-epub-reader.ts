@@ -195,6 +195,21 @@ function focusX(range: Range, forward: boolean): number | null {
   return frame.getBoundingClientRect().left + (forward ? edge.right : edge.left);
 }
 
+const MARKS_REPAINT_MS = 50;
+
+/**
+ * Forces the browser to repaint epub.js's marks pane (the SVG over the page that draws highlights).
+ * In desktop full screen a newly added mark can stay unpainted until the next resize — it exists
+ * in the DOM but only shows after leaving full screen. A brief compositing change repaints it.
+ */
+function repaintMarks(root: HTMLElement | null): void {
+  const panes = root ? Array.from(root.querySelectorAll<SVGSVGElement>('.epub-view > svg')) : [];
+  if (panes.length === 0) return;
+  panes.forEach((pane) => pane.style.setProperty('transform', 'translateZ(0)'));
+  // A timeout, not rAF: rAF is paused in background tabs and would leave the layer promoted.
+  window.setTimeout(() => panes.forEach((pane) => pane.style.removeProperty('transform')), MARKS_REPAINT_MS);
+}
+
 const BLOCK_SELECTOR = 'p, li, blockquote, dd, dt, td, figcaption, h1, h2, h3, h4, h5, h6';
 const CONTEXT_MAX_CHARS = 1500;
 
@@ -758,6 +773,7 @@ export function useEpubReader(options: Options): EpubReader {
       );
       highlighted.current.push(annotation.cfi_range);
     }
+    repaintMarks(latest.current.container);
   }, []);
 
   /**
