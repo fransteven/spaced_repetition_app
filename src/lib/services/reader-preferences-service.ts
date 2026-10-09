@@ -9,8 +9,9 @@ export type ReaderPreferences = Omit<InferSelectModel<typeof readerPreferences>,
 export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
   font_scale: 1,
   font_family: 'book',
-  line_height: 1.55,
+  line_height: 1.45,
   justify: false,
+  two_pages: false,
   theme: 'sepia',
 };
 
@@ -22,6 +23,7 @@ export async function getReaderPreferences(userId: string): Promise<ReaderPrefer
     font_family: row.font_family,
     line_height: row.line_height,
     justify: row.justify,
+    two_pages: row.two_pages,
     theme: row.theme,
   };
 }

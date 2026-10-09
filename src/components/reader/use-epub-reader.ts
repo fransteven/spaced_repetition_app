@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Book, Contents, EpubCFI, Location, NavItem, Rendition } from 'epubjs';
+import type { RenditionOptions } from 'epubjs/types/rendition';
 import type Section from 'epubjs/types/section';
 
 import type { BookAnnotation } from '@/lib/services/annotation-service';
@@ -92,6 +93,8 @@ interface Options extends Callbacks {
   locationsJson: string | null;
   language: string | null;
   css: string;
+  /** Two pages side by side on wide screens; otherwise one column fills the page (the default). */
+  twoPages: boolean;
   container: HTMLElement | null;
 }
 
@@ -111,6 +114,22 @@ export interface EpubReader {
 }
 
 const EXCERPT_CHARS = 160;
+// Space between columns, half of it padding on each side of the text. epub.js defaults to width / 12,
+// which on a phone (already inside the page-turn margins) wastes ~7% of the width. Spreads keep it.
+const TOUCH_GAP_PX = 16;
+const SPREAD_MIN_WIDTH = 1000;
+
+/** epub.js reads `gap` from the rendition settings but its typings leave it out. */
+type RenderOptions = RenditionOptions & { gap?: number };
+
+function spreadMode(twoPages: boolean): 'auto' | 'none' {
+  return twoPages ? 'auto' : 'none';
+}
+
+function columnGap(container: HTMLElement): number | undefined {
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  return touch && container.clientWidth < SPREAD_MIN_WIDTH ? TOUCH_GAP_PX : undefined;
+}
 
 function flattenToc(items: NavItem[]): NavItem[] {
   return items.flatMap((item) => [item, ...flattenToc(item.subitems ?? [])]);
@@ -245,7 +264,9 @@ export function useEpubReader(options: Options): EpubReader {
   const anchorAttempts = useRef(0);
   const anchorTimer = useRef<number | undefined>(undefined);
   // Selection state. While text is selected the book must not move under the finger: the browser's own
-  // autoscroll (dragging a handle to the page edge) is undone, and only a sustained push turns the page.
+  // autoscroll is always undone, and only the pointer itself held past a side edge turns the page.
+  // Autoscroll never counts as a push: on Android a native handle dragged to the top or bottom of the page
+  // hit-tests into the neighbouring column, so it looked like a push and flipped page after page.
   const scroller = useRef<HTMLElement | null>(null);
   const selectionActive = useRef(false);
   const selectionReported = useRef(false);
@@ -258,6 +279,7 @@ export function useEpubReader(options: Options): EpubReader {
   const pointerDown = useRef(false);
   const pointerSide = useRef<PageDirection | null>(null); // the finger/mouse is past this page edge
   const pageDelta = useRef(0); // scroll distance of one page turn (epub.js layout delta)
+  const appliedTwoPages = useRef<boolean | null>(null);
 
   // Latest options without re-creating the rendition.
   const latest = useRef(options);
@@ -441,13 +463,15 @@ export function useEpubReader(options: Options): EpubReader {
     }
     selectionContents.current = contents;
     touchSelectionChanged.current = true;
+    // Text the reader cannot see never joins the selection, so the browser has nothing off-page to scroll to.
+    clampToPage(contents);
     // Hide the toolbar (and the lookup) while the selection is still moving.
     if (selectionReported.current) {
       selectionReported.current = false;
       latest.current.onSelect(null);
     }
     scheduleReport(SELECTION_SETTLE_MS);
-  }, [endSelection, scheduleReport]);
+  }, [clampToPage, endSelection, scheduleReport]);
 
   /** Turns the page under a selection, inside its section (the selection lives in that section's iframe). */
   const turnAtEdge = useCallback(async (direction: PageDirection): Promise<void> => {
@@ -473,8 +497,8 @@ export function useEpubReader(options: Options): EpubReader {
   }, [cancelAnchorHold]);
 
   /**
-   * The browser tried to scroll the book toward `direction` while a selection was being dragged (its handle
-   * is at the page edge). Held long enough, that turns the page; let go earlier, nothing moves.
+   * The pointer dragging a selection went past the page's side edge toward `direction`. Held there long
+   * enough, that turns the page; pulled back or let go earlier, nothing moves.
    */
   const pushEdge = useCallback((direction: PageDirection): void => {
     const now = Date.now();
@@ -487,9 +511,8 @@ export function useEpubReader(options: Options): EpubReader {
       const contents = selectionContents.current;
       if (!push || !contents || !selectionActive.current) return;
       const at = Date.now();
-      // A finger held still past the edge keeps pushing even when the browser stops autoscrolling.
-      const held = pointerSide.current === push.direction || focusOutside(contents) === push.direction;
-      if (pointerDown.current && held) edgePush.current = { ...push, lastAt: at };
+      // A pointer held still past the edge keeps pushing (pointermove stops firing when it rests).
+      if (pointerDown.current && pointerSide.current === push.direction) edgePush.current = { ...push, lastAt: at };
       const live = edgePush.current;
       if (live && edgePushReady(live, at)) {
         edgePush.current = null;
@@ -504,17 +527,14 @@ export function useEpubReader(options: Options): EpubReader {
       edgeTimer.current = window.setTimeout(check, Math.max(EDGE_POLL_MS, live.startedAt + EDGE_HOLD_MS - at));
     };
     edgeTimer.current = window.setTimeout(check, EDGE_POLL_MS);
-  }, [focusOutside, scheduleReport, turnAtEdge]);
+  }, [scheduleReport, turnAtEdge]);
 
   /** Undoes any scroll of the book that the reader did not ask for while text is selected. */
   const guardScroll = useCallback((): void => {
     const element = scroller.current;
     if (!element || !selectionActive.current || edgeTurning.current) return;
-    const delta = element.scrollLeft - pageLeft.current;
-    if (Math.abs(delta) < 1) return;
-    element.scrollLeft = pageLeft.current;
-    pushEdge(delta > 0 ? 1 : -1);
-  }, [pushEdge]);
+    if (Math.abs(element.scrollLeft - pageLeft.current) >= 1) element.scrollLeft = pageLeft.current;
+  }, []);
 
   const clearSelection = useCallback((): void => {
     endSelection();
@@ -538,16 +558,19 @@ export function useEpubReader(options: Options): EpubReader {
 
       const book = ePub(buffer);
       bookRef.current = book;
-      const rendition = book.renderTo(container, {
+      appliedTwoPages.current = latest.current.twoPages;
+      const renderOptions: RenderOptions = {
         width: '100%',
         height: '100%',
         flow: 'paginated',
-        spread: 'auto',
-        minSpreadWidth: 1000,
+        spread: spreadMode(latest.current.twoPages),
+        minSpreadWidth: SPREAD_MIN_WIDTH,
+        gap: columnGap(container),
         // Required for WebKit to deliver taps and selections to our listeners; the book's own code
         // never runs (see sanitize-section.ts, registered below before any section is displayed).
         allowScriptedContent: true,
-      });
+      };
+      const rendition = book.renderTo(container, renderOptions);
       renditionRef.current = rendition;
       const turn = (target: Rendition, direction: PageDirection): void => {
         cancelAnchorHold();
@@ -730,6 +753,17 @@ export function useEpubReader(options: Options): EpubReader {
     contentsList(rendition).forEach((contents) => applyStyle(contents, css, latest.current.language));
     restoreAnchor(60);
   }, [css, status, restoreAnchor]);
+
+  // One column or two pages: epub.js re-paginates, so hold the reader's place through it.
+  const { twoPages } = options;
+  useEffect(() => {
+    const rendition = renditionRef.current;
+    if (!rendition || status !== 'ready' || appliedTwoPages.current === twoPages) return;
+    appliedTwoPages.current = twoPages;
+    clearSelection();
+    rendition.spread(spreadMode(twoPages), SPREAD_MIN_WIDTH);
+    restoreAnchor(RESIZE_SETTLE_MS);
+  }, [twoPages, status, clearSelection, restoreAnchor]);
 
   // Arrow keys (and "f") when focus is outside the iframe.
   useEffect(() => {

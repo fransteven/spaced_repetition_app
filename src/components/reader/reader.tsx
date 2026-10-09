@@ -287,6 +287,7 @@ export function Reader({
     locationsJson: book.locations_json,
     language: book.language,
     css,
+    twoPages: preferences.two_pages,
     container: css ? container : null, // wait for tokens so the first page is styled
     onRelocated: handleRelocated,
     onSelect: handleSelect,
@@ -446,13 +447,13 @@ export function Reader({
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background text-on-surface">
-      {/* Top bar — hidden (but still occupying space) in clean reading mode so the
-          page never re-paginates when chrome toggles. */}
+      {/* Top bar — floats over the page (like Kindle) so the text gets the full height, and toggling
+          the chrome never re-paginates. Only the pills catch taps; the gaps between them reach the page. */}
       <header
         className={cn(
           // gap-1/px-2 on phones: seven 44 px pills fit in 360 px.
-          'grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 transition-opacity duration-200 sm:gap-3 sm:px-5',
-          chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
+          'pointer-events-none absolute inset-x-0 top-0 z-10 grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 transition-opacity duration-200 sm:gap-3 sm:px-5',
+          chromeVisible ? 'opacity-100 *:pointer-events-auto' : 'opacity-0'
         )}
       >
         <div className={cn(pillGroup, 'justify-self-start')}>
@@ -533,11 +534,12 @@ export function Reader({
 
       {/* The page stays marked while the chrome is hidden, like a ribbon. */}
       {pageBookmark && !chromeVisible && (
-        <Bookmark aria-hidden className="pointer-events-none absolute right-6 top-0 size-5 fill-primary text-primary sm:right-10" />
+        <Bookmark aria-hidden className="pointer-events-none absolute right-1 top-0 size-5 fill-primary text-primary pointer-fine:right-10" />
       )}
 
       {/* Page. Only the side margins (and swipes) turn pages: a tap on the text never does, so
-          selecting a word near the edge can't flip the page. 44 px on phones = minimum touch target. */}
+          selecting a word near the edge can't flip the page. Touch screens get narrow 24 px margins
+          (swipes are the main way to turn) so the text uses most of the width. */}
       <main className="relative flex min-h-0 flex-1 items-stretch">
         <button
           type="button"
@@ -545,7 +547,7 @@ export function Reader({
           data-testid="page-prev"
           onClick={() => turnPage(-1)}
           disabled={location?.atStart}
-          className="group flex w-11 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible sm:w-14 lg:w-16"
+          className="group flex w-6 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible pointer-fine:w-14 pointer-fine:lg:w-16"
         >
           <ChevronLeft className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
         </button>
@@ -565,14 +567,14 @@ export function Reader({
           data-testid="page-next"
           onClick={() => turnPage(1)}
           disabled={location?.atEnd}
-          className="group flex w-11 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible sm:w-14 lg:w-16"
+          className="group flex w-6 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible pointer-fine:w-14 pointer-fine:lg:w-16"
         >
           <ChevronRight className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
         </button>
       </main>
 
       {/* Footer — page position, like Apple Books */}
-      <footer className="flex h-12 shrink-0 flex-col items-center justify-center gap-1.5 px-4">
+      <footer className="flex h-8 shrink-0 flex-col items-center justify-center gap-1 px-4">
         <p className="text-body-sm tabular text-on-surface-variant" aria-live="polite" data-testid="page-label">
           {pageLabel}
         </p>

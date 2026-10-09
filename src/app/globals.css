@@ -360,7 +360,9 @@
   --reader-sepia-surface-container:  #fef3e2;
   --reader-sepia-on-surface:         #35271a;
   --reader-sepia-on-surface-variant: #6e6350;
-  --reader-swatch-light:    #ffffff;
+  /* Reader — light theme is pure white paper (Kindle). Only consumed by [data-reader-theme="light"]. */
+  --reader-white-surface:   #ffffff;
+  --reader-swatch-light:    var(--reader-white-surface);
   --reader-swatch-on-light: #191c1d;
   --reader-swatch-dark:     var(--reader-black-surface);
   --reader-swatch-on-dark:  var(--reader-black-on-surface);
@@ -517,11 +519,17 @@
   --highlight-opacity: 0.5;
 }
 
+/* Reader light theme: pure white page, like Kindle (the app canvas is #f8f9fa). */
+[data-reader-theme="light"] {
+  --background: var(--reader-white-surface);
+  --surface: var(--reader-white-surface);
+}
+
 /* Forces the light palette in the reader while the app is dark. */
 .dark[data-reader-theme="light"] {
-  --background: #f8f9fa;
+  --background: var(--reader-white-surface);
   --foreground: #191c1d;
-  --surface: #f8f9fa;
+  --surface: var(--reader-white-surface);
   --card: #ffffff;
   --card-foreground: #191c1d;
   --popover: #ffffff;

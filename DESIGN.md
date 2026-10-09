@@ -187,6 +187,7 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
 ### Tema del lector
 - Mientras el lector está montado, `<html>` lleva `data-reader-theme` (`sepia` · `light` · `dark`; `auto` no lo pone). Los bloques de `globals.css` re-apuntan los tokens base, así primitivos y sheets en portal siguen el tema sin clases `dark:`.
 - **Sepia (default, estilo Apple Books):** `--reader-sepia-surface #f1e3ca`, `--reader-sepia-surface-container #fef3e2`, `--reader-sepia-on-surface #35271a`, `--reader-sepia-on-surface-variant #6e6350` (≥ 4.5:1; el `#847861` de Apple Books no cumple).
+- **Light = blanco puro (estilo Kindle):** `--reader-white-surface #ffffff` en página y `<meta name="theme-color">`; texto `#191c1d`. El canvas de la app sigue en `#f8f9fa`.
 - **Dark = negro puro (OLED):** `--reader-black-surface #000000` en página y `<meta name="theme-color">`; texto `--reader-black-on-surface #dcdddf` (no blanco puro, evita halación); chrome/sheets sobre `--reader-black-surface-container #161718`. Aplica tanto con la app en claro como en oscuro.
 - El contenido del libro vive en un iframe: `src/components/reader/reader-theme.ts` lee los tokens resueltos y los inyecta como CSS. Nunca hex en ese archivo.
 

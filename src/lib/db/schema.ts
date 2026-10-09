@@ -294,6 +294,7 @@ export const readerPreferences = pgTable('reader_preferences', {
   font_family: readerFontEnum('font_family').notNull().default('book'),
   line_height: real('line_height').notNull().default(1.55),
   justify:     boolean('justify').notNull().default(false),
+  two_pages:   boolean('two_pages').notNull().default(false), // side-by-side spread on wide screens; one column by default
   theme:       readerThemeEnum('theme').notNull().default('sepia'),
   updated_at:  timestamp('updated_at').defaultNow().notNull(),
 });

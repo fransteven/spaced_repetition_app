@@ -2,7 +2,7 @@
 
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlignJustify, AlignLeft, Minus, Plus } from 'lucide-react';
+import { AlignJustify, AlignLeft, BookOpen, Minus, Plus, RectangleVertical } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import type { ReaderPreferences } from '@/lib/services/reader-preferences-service';
@@ -28,12 +28,12 @@ const FONTS: Array<{ value: ReaderPreferences['font_family']; label: string; sam
 
 const LINE_HEIGHTS: Array<{ value: number; label: string }> = [
   { value: 1.35, label: 'Compact' },
-  { value: 1.55, label: 'Normal' },
+  { value: 1.45, label: 'Normal' },
   { value: 1.8, label: 'Relaxed' },
 ];
 
 const SCALE_STEP = 0.1;
-const SCALE_MIN = 0.8;
+const SCALE_MIN = 0.7;
 const SCALE_MAX = 1.6;
 
 interface ReaderSettingsSheetProps {
@@ -173,6 +173,20 @@ export function ReaderSettingsSheet({
                 Justified
               </FilterChip>
             </div>
+          </Section>
+
+          <Section title="Layout">
+            <div className="flex flex-wrap gap-2">
+              <FilterChip active={!values.two_pages} onClick={() => { setValue('two_pages', false, { shouldDirty: true }); commit(); }}>
+                <RectangleVertical />
+                One page
+              </FilterChip>
+              <FilterChip active={values.two_pages === true} onClick={() => { setValue('two_pages', true, { shouldDirty: true }); commit(); }}>
+                <BookOpen />
+                Two pages
+              </FilterChip>
+            </div>
+            <p className="text-body-sm text-on-surface-variant">Two pages side by side on wide screens only.</p>
           </Section>
         </div>
       </SheetContent>

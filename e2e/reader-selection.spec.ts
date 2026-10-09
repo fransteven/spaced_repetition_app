@@ -5,7 +5,8 @@ import { openReader, probe, type WordBox } from './reader-probe';
 /**
  * Reader: selecting and highlighting on phones.
  * - Only the side margins (and swipes) turn pages; tapping or selecting text never does.
- * - A selection dragged past the page edge only turns the page after a held push, inside the chapter.
+ * - Only a pointer held in the side margin turns the page under a selection (inside the chapter);
+ *   the browser's autoscroll never does.
  * - A single word opens the dictionary card (no blur, no paid translation until asked).
  */
 
@@ -45,11 +46,12 @@ test('tapping words at the very edge of the text never turns the page', async ({
   }
 });
 
-test('the side margins turn pages and are at least 44 px wide', async ({ page }) => {
+test('the side margins turn pages: narrow on touch screens, 44 px or more with a mouse', async ({ page }) => {
   const next = page.getByTestId('page-next');
   const prev = page.getByTestId('page-prev');
   const box = await next.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+  const coarse = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(coarse ? 24 : 44);
 
   const start = await probe.scrollLeft(page);
   await tap(page, box!.x + box!.width / 2, box!.y + box!.height / 2);
@@ -118,25 +120,18 @@ test('while text is selected, the book does not scroll under the finger', async 
   await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
 });
 
-test('holding a selection at the page edge turns the page and keeps the selection', async ({ page }) => {
-  // One page turn, measured with the margin buttons.
-  const before = await probe.scrollLeft(page);
-  await page.getByTestId('page-next').click();
-  await expect.poll(() => probe.scrollLeft(page)).toBeGreaterThan(before);
-  const pageDelta = (await probe.scrollLeft(page)) - before;
-  await page.getByTestId('page-prev').click();
-  await expect.poll(() => probe.scrollLeft(page)).toBe(before);
-
+test('a selection held at the page edge never turns the page on its own', async ({ page }) => {
+  // On Android a native handle dragged to the top or bottom of the page hit-tests into the next column, so
+  // the browser keeps autoscrolling: that alone must never flip pages (only a pointer held in the margin does).
   const words = await probe.words(page);
   const word = await probe.select(page, words.length - 2);
   await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
+  const before = await probe.scrollLeft(page);
 
-  await probe.pushFor(page, 40, 900); // held ~0.9 s: one turn (holding longer keeps turning)
+  await probe.pushFor(page, 40, 2000);
+  await page.waitForTimeout(600);
 
-  // Exactly one page further (not wherever the browser's autoscroll happened to stop).
-  await expect.poll(() => probe.scrollLeft(page)).toBeGreaterThan(before);
-  await page.waitForTimeout(400);
-  expect((await probe.scrollLeft(page)) - before).toBe(pageDelta);
+  expect(await probe.scrollLeft(page)).toBe(before);
   expect(await probe.selectionText(page)).toContain(word!.text);
   await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
 });
@@ -210,4 +205,55 @@ test('a mouse selection that only brushes the margin does not turn the page (des
   expect(await probe.scrollLeft(page)).toBe(before);
   // Text the reader cannot see is never selected: the selection stops at the page end.
   await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
+});
+
+test('on a phone the text fills most of the screen width', async ({ page }) => {
+  test.skip(!isTouch(page), 'phone layout');
+  const words = await probe.words(page);
+  const left = Math.min(...words.map((word) => word.x));
+  const right = Math.max(...words.map((word) => word.x + word.width));
+  const width = page.viewportSize()!.width;
+  expect((right - left) / width).toBeGreaterThan(0.8);
+  await page.screenshot({ path: `test-results/reader-density-${test.info().project.name}.png` });
+});
+
+test('the Light theme is a pure white page', async ({ page }) => {
+  test.skip(!isTouch(page) || test.info().project.name !== 'android-chrome', 'one project is enough');
+  const pickTheme = async (name: string): Promise<void> => {
+    await page.getByRole('button', { name: 'Reading settings' }).click();
+    await page.getByRole('button', { name }).click();
+    await page.keyboard.press('Escape');
+  };
+  await pickTheme('Light');
+  const pageBackground = (): Promise<string> =>
+    page.evaluate(() => {
+      const doc = document.querySelector('iframe')?.contentDocument;
+      return doc ? getComputedStyle(doc.documentElement).backgroundColor : '';
+    });
+  await expect.poll(pageBackground).toBe('rgb(255, 255, 255)');
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(255, 255, 255)');
+  await page.screenshot({ path: 'test-results/reader-light.png' });
+  await pickTheme('Sepia'); // leave the shared e2e user as the other tests expect it
+});
+
+test('a wide screen shows one full-width column by default, two pages only when chosen', async ({ page }) => {
+  test.skip(isTouch(page), 'wide screen');
+  const pickLayout = async (name: string): Promise<void> => {
+    await page.getByRole('button', { name: 'Reading settings' }).click();
+    await page.getByRole('button', { name }).click();
+    await page.keyboard.press('Escape');
+  };
+  // Lines run across the page: a word sits in the middle of the screen, where a spread has its gutter.
+  const middleCovered = async (): Promise<boolean> => {
+    const mid = page.viewportSize()!.width / 2;
+    return (await probe.words(page)).some((word) => word.x < mid && word.x + word.width > mid);
+  };
+  expect(await middleCovered()).toBe(true);
+
+  await pickLayout('Two pages');
+  await expect.poll(middleCovered).toBe(false);
+  await page.screenshot({ path: 'test-results/reader-two-pages.png' });
+  await pickLayout('One page'); // leave the shared e2e user on the default
+  await expect.poll(middleCovered).toBe(true);
+  await page.screenshot({ path: 'test-results/reader-one-page.png' });
 });

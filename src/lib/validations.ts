@@ -155,10 +155,11 @@ export const AnnotationNoteFormSchema = z.object({
 export type AnnotationNoteFormValues = z.infer<typeof AnnotationNoteFormSchema>;
 
 export const ReaderPreferencesSchema = z.object({
-  font_scale:  z.number().min(0.8).max(1.6).optional(),
+  font_scale:  z.number().min(0.7).max(1.6).optional(),
   font_family: z.enum(['book', 'sans', 'original']).optional(),
   line_height: z.number().min(1.3).max(2).optional(),
   justify:     z.boolean().optional(),
+  two_pages:   z.boolean().optional(),
   theme:       z.enum(['auto', 'light', 'dark', 'sepia']).optional(),
 });
 

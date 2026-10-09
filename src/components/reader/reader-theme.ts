@@ -64,7 +64,10 @@ export function buildReaderCss(tokens: ReaderTokens, prefs: ReaderPreferences, o
   return `
 ${literataFaces(origin)}
 html {
-  font-size: ${Math.round(125 * prefs.font_scale)}% !important;
+  font-size: ${Math.round(112.5 * prefs.font_scale)}% !important;
+  /* epub.js pads the page 20 px top and bottom (inline, not !important): give that room to the text. */
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
   background: ${tokens.background} !important;
   -webkit-text-size-adjust: 100%;
 }

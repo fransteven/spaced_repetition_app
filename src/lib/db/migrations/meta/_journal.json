@@ -120,6 +120,13 @@
       "when": 1791107500750,
       "tag": "0016_book_bookmarks",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791511756890,
+      "tag": "0017_reader_two_pages",
+      "breakpoints": true
     }
   ]
 }
