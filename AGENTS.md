@@ -211,8 +211,9 @@ Phase 2 adds `card_sources` (card → book + CFI, for "Open in book" in study),
 `books.translate_from/translate_to` (last language pair per book).
 Phase 3 adds pgvector (custom migration `0011`), `book_chunks` (768-dim OpenAI
 `text-embedding-3-small` vectors, exact per-book search — no global ANN index),
-`books.index_status`, `books.index_fingerprint` (provider:model:dims:chunker of the
-current index; a mismatch rebuilds it) and `llm_usage` (per-user daily cap on paid
+`books.index_status`, `books.index_fingerprint` (provider:model:dims:chunker:ctx|hdr of the
+current index; a mismatch rebuilds it), `book_chunks.heading/context` (subsection + contextual-retrieval
+note written at index time) with the generated `search_tsv` full-text column and `llm_usage` (per-user daily cap on paid
 LLM calls). Chunks are written by the srs-llm-api service through the internal API
 (§6.5), never directly.
 Plans: `docs/plans/epub-reader-fase-1.md` … `epub-reader-fase-3-langgraph.md`.
@@ -359,7 +360,8 @@ book data through internal routes of this app. Both directions use the shared
 | Next → Python | `POST /v1/rag/ask` (SSE) | Answer a question with the LangGraph graph; Next first checks ownership, the spoiler limit (`spine_limit`), index readiness and the daily cap |
 | Next → Python | `POST /v1/rag/index` (202) | Index a book in the background (Inngest `book-index`) |
 | Next → Python | `POST /v1/llm/translate` · `/v1/llm/suggest-card` | Single structured-output calls |
-| Python → Next | `POST /api/internal/rag/search` | Vector search for one user's book (ownership + spoiler filter in SQL) |
+| Python → Next | `POST /api/internal/rag/search` | Hybrid search for one user's book: cosine distance + Postgres full-text (`book_chunks.search_tsv`, `query_text`), fused with RRF in `src/lib/rag/rrf.ts` (ownership + spoiler filter in SQL) |
+| Python → Next | `POST /api/internal/rag/neighbors` | Chunks next to retrieved ones in the same section (small-to-big expansion before answering); same ownership + spoiler rules |
 | Python → Next | `POST /api/internal/rag/passages` | Chunks of a range of sections in reading order, evenly sampled (chapter summary, key terms, "so far"); same ownership + spoiler rules |
 | Python → Next | `GET …/books/[id]/sections` · `PUT …/chunks` · `POST …/index/begin\|complete\|fail` | Indexing: page sections, upload embedded chunks, claim (compare-and-set) and release the index |
 

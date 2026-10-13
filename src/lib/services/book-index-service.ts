@@ -1,10 +1,11 @@
-import { and, asc, cosineDistance, count, eq, gt, gte, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, cosineDistance, count, desc, eq, gt, gte, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { bookChunks, bookSections, books } from '@/lib/db/schema';
 import type { InternalChunk } from '@/lib/validations';
 import { getOwnedBook } from '@/lib/services/book-service';
 import { ServiceError } from '@/lib/services/service-error';
+import { fuseRrf } from '@/lib/rag/rrf';
 
 /**
  * Data side of "Ask the book". The srs-llm-api service (LangGraph + OpenAI) owns the RAG logic but
@@ -32,7 +33,9 @@ export interface SearchHit {
   section_title: string | null;
   href: string; // zip path of the section (book_sections.href)
   text: string;
-  distance: number;
+  heading: string | null; // subsection, when the chunker found one
+  context: string | null; // contextual-retrieval note written at index time
+  distance: number; // cosine distance; 1 for a passage found only by the full-text search
 }
 
 export interface SearchResult {
@@ -130,6 +133,8 @@ export async function upsertBookChunks(bookId: string, chunks: InternalChunk[]):
       set: {
         section_id: sql`excluded.section_id`,
         text: sql`excluded.text`,
+        heading: sql`excluded.heading`,
+        context: sql`excluded.context`,
         embedding: sql`excluded.embedding`,
       },
     });
@@ -165,9 +170,25 @@ export async function failBookIndex(bookId: string): Promise<void> {
 
 // ── Retrieval (called by the Python service on behalf of a user) ─────────────
 
+const hitColumns = {
+  id: bookChunks.id,
+  spine_index: bookChunks.spine_index,
+  chunk_index: bookChunks.chunk_index,
+  section_title: bookSections.title,
+  href: bookSections.href,
+  text: bookChunks.text,
+  heading: bookChunks.heading,
+  context: bookChunks.context,
+};
+
+/**
+ * Hybrid search: cosine distance over the embeddings plus (with `query_text`) Postgres full-text
+ * search, merged with Reciprocal Rank Fusion. The lexical side finds names, terms and exact wording
+ * that embeddings blur. Both sides apply the same ownership and spoiler filter.
+ */
 export async function searchBookChunks(
   userId: string,
-  input: { book_id: string; embedding: number[]; spine_limit: number | null; limit: number }
+  input: { book_id: string; embedding: number[]; spine_limit: number | null; limit: number; query_text?: string }
 ): Promise<SearchResult> {
   const book = await getOwnedBook(userId, input.book_id);
   if (book.status !== 'ready') throw new ServiceError('UNAVAILABLE', 'Book is not ready yet');
@@ -175,27 +196,86 @@ export async function searchBookChunks(
     return { index_status: book.index_status, index_fingerprint: book.index_fingerprint, chunks: [] };
   }
 
+  const inScope = and(
+    eq(bookChunks.book_id, book.id),
+    input.spine_limit === null ? undefined : lte(bookChunks.spine_index, input.spine_limit),
+  );
   const distance = cosineDistance(bookChunks.embedding, input.embedding);
+  const vectorSearch = db
+    .select({ ...hitColumns, distance: sql<number>`${distance}` })
+    .from(bookChunks)
+    .innerJoin(bookSections, eq(bookSections.id, bookChunks.section_id))
+    .where(inScope)
+    .orderBy(distance)
+    .limit(input.limit);
+
+  const queryText = input.query_text?.trim();
+  if (!queryText) {
+    return { index_status: 'ready', index_fingerprint: book.index_fingerprint, chunks: await vectorSearch };
+  }
+
+  const tsQuery = sql`websearch_to_tsquery('simple', ${queryText})`;
+  const [byVector, byText] = await Promise.all([
+    vectorSearch,
+    db
+      .select({ ...hitColumns, distance: sql<number>`${distance}` })
+      .from(bookChunks)
+      .innerJoin(bookSections, eq(bookSections.id, bookChunks.section_id))
+      .where(and(inScope, sql`${bookChunks.search_tsv} @@ ${tsQuery}`))
+      .orderBy(desc(sql`ts_rank_cd(${bookChunks.search_tsv}, ${tsQuery})`))
+      .limit(input.limit),
+  ]);
+
+  return {
+    index_status: 'ready',
+    index_fingerprint: book.index_fingerprint,
+    chunks: fuseRrf([byVector, byText], input.limit),
+  };
+}
+
+/**
+ * The chunks within `window` positions of each given chunk, in the same section, so a retrieved
+ * passage can be read with the paragraphs around it. Same ownership and spoiler rules as search.
+ */
+export async function listChunkNeighbors(
+  userId: string,
+  input: { book_id: string; chunk_ids: string[]; window: number; spine_limit: number | null }
+): Promise<SearchResult> {
+  const book = await getOwnedBook(userId, input.book_id);
+  if (book.status !== 'ready') throw new ServiceError('UNAVAILABLE', 'Book is not ready yet');
+  if (book.index_status !== 'ready') {
+    return { index_status: book.index_status, index_fingerprint: book.index_fingerprint, chunks: [] };
+  }
+
+  const anchors = await db
+    .select({ section_id: bookChunks.section_id, chunk_index: bookChunks.chunk_index })
+    .from(bookChunks)
+    .where(and(
+      eq(bookChunks.book_id, book.id),
+      inArray(bookChunks.id, input.chunk_ids),
+      input.spine_limit === null ? undefined : lte(bookChunks.spine_index, input.spine_limit),
+    ));
+  if (anchors.length === 0) return { index_status: 'ready', index_fingerprint: book.index_fingerprint, chunks: [] };
+
   const chunks = await db
-    .select({
-      id: bookChunks.id,
-      spine_index: bookChunks.spine_index,
-      chunk_index: bookChunks.chunk_index,
-      section_title: bookSections.title,
-      href: bookSections.href,
-      text: bookChunks.text,
-      distance: sql<number>`${distance}`,
-    })
+    .select(hitColumns)
     .from(bookChunks)
     .innerJoin(bookSections, eq(bookSections.id, bookChunks.section_id))
     .where(and(
       eq(bookChunks.book_id, book.id),
-      input.spine_limit === null ? undefined : lte(bookChunks.spine_index, input.spine_limit),
+      or(...anchors.map((anchor) => and(
+        eq(bookChunks.section_id, anchor.section_id),
+        gte(bookChunks.chunk_index, anchor.chunk_index - input.window),
+        lte(bookChunks.chunk_index, anchor.chunk_index + input.window),
+      ))),
     ))
-    .orderBy(distance)
-    .limit(input.limit);
+    .orderBy(asc(bookChunks.spine_index), asc(bookChunks.chunk_index));
 
-  return { index_status: 'ready', index_fingerprint: book.index_fingerprint, chunks };
+  return {
+    index_status: 'ready',
+    index_fingerprint: book.index_fingerprint,
+    chunks: chunks.map((chunk) => ({ ...chunk, distance: 0 })),
+  };
 }
 
 /**
@@ -239,6 +319,8 @@ export async function listBookPassages(
       section_title: bookSections.title,
       href: bookSections.href,
       text: bookChunks.text,
+      heading: bookChunks.heading,
+      context: bookChunks.context,
     })
     .from(bookChunks)
     .innerJoin(bookSections, eq(bookSections.id, bookChunks.section_id))

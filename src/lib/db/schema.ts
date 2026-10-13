@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index, uniqueIndex, vector } from 'drizzle-orm/pg-core';
+import { sql, type SQL } from 'drizzle-orm';
+import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index, uniqueIndex, vector, customType } from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from '@auth/core/adapters';
 import { EMBEDDING_DIMENSIONS } from '../rag/constants';
 
@@ -202,6 +203,9 @@ export const bookSections = pgTable('book_sections', {
   uniqueIndex('book_sections_book_spine_idx').on(table.book_id, table.spine_index),
 ]);
 
+// Postgres full-text vector (lexical half of the hybrid search). Read-only: always a generated column.
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
+
 // Retrieval unit for "Ask the book": a few paragraphs of one section plus their
 // embedding. Written by the srs-llm-api service (through the internal API); the
 // fingerprint of the model that produced them is kept in books.index_fingerprint.
@@ -212,12 +216,19 @@ export const bookChunks = pgTable('book_chunks', {
   spine_index: integer('spine_index').notNull(),     // copy of book_sections.spine_index for filtering
   chunk_index: integer('chunk_index').notNull(),     // order inside the section
   text:        text('text').notNull(),
+  heading:     text('heading'),                       // subsection the passage belongs to (chunker heuristic)
+  context:     text('context'),                       // 1-2 sentences situating it in the section (contextual retrieval)
   embedding:   vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+  // 'simple' config: books are English or Spanish, and the lexical side exists for exact terms and names.
+  search_tsv:  tsvector('search_tsv').generatedAlwaysAs(
+    (): SQL => sql`to_tsvector('simple', coalesce(${bookChunks.heading}, '') || ' ' || coalesce(${bookChunks.context}, '') || ' ' || ${bookChunks.text})`
+  ),
 }, (table) => [
   // Exact search over one book's chunks (a few thousand at most). No global
   // HNSW index: it would filter by book after the ANN search and miss results.
   // The unique key makes chunk uploads idempotent and also serves (book, spine) lookups.
   uniqueIndex('book_chunks_book_spine_chunk_idx').on(table.book_id, table.spine_index, table.chunk_index),
+  index('book_chunks_search_tsv_idx').using('gin', table.search_tsv),
 ]);
 
 // One row per paid LLM call a user triggers (ask / translate / suggest). Counted per UTC day

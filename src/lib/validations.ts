@@ -240,6 +240,17 @@ export const InternalSearchSchema = z.object({
   embedding:   EmbeddingSchema,
   spine_limit: z.number().int().min(0).nullable(),
   limit:       z.number().int().min(1).max(30),
+  // Keywords for the full-text half of a hybrid search; without it the search is vector-only.
+  query_text:  z.string().trim().max(500).optional(),
+});
+
+/** Chunks next to the given ones in the same section ("small-to-big" expansion of retrieved passages). */
+export const InternalNeighborsSchema = z.object({
+  user_id:     z.string().uuid(),
+  book_id:     z.string().uuid(),
+  chunk_ids:   z.array(z.string().uuid()).min(1).max(30),
+  window:      z.number().int().min(1).max(3),
+  spine_limit: z.number().int().min(0).nullable(),
 });
 
 /** Passages of a range of sections in reading order (chapter summary, key terms, "so far"). */
@@ -264,6 +275,8 @@ export const InternalChunkSchema = z.object({
   spine_index: z.number().int().min(0),
   chunk_index: z.number().int().min(0),
   text:        z.string().min(1).max(10_000),
+  heading:     z.string().max(500).nullish(),
+  context:     z.string().max(2_000).nullish(),
   embedding:   EmbeddingSchema,
 });
 
