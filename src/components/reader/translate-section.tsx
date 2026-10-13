@@ -204,11 +204,12 @@ export function TranslateSection({
           Translate to {languageLabel(to)}
         </Button>
       ) : (
-        <section aria-live="polite" className="rounded-xl bg-card p-4 shadow-ambient">
-          <p className="mb-2 text-label-sm uppercase text-on-surface-variant">{languageLabel(to)}</p>
+        // Tinted and in the UI face, so the translation never reads as part of the book.
+        <section aria-live="polite" data-testid="translation-result" className="rounded-xl bg-reader-translation p-4 text-on-reader-translation">
+          <p className="mb-2 text-label-sm uppercase text-on-reader-translation/80">{languageLabel(to)}</p>
           {loading ? (
             <div className="space-y-2">
-              {startingService && <p className="text-label-md text-on-surface-variant">{AI_STARTING_HINT}</p>}
+              {startingService && <p className="text-label-md text-on-reader-translation/80">{AI_STARTING_HINT}</p>}
               <Skeleton className="h-4 w-11/12" />
               <Skeleton className="h-4 w-2/3" />
             </div>
@@ -221,7 +222,7 @@ export function TranslateSection({
               </Button>
             </div>
           ) : (
-            <p className="max-h-60 overflow-y-auto whitespace-pre-wrap font-reader text-body-lg text-on-surface">
+            <p className="max-h-60 overflow-y-auto whitespace-pre-wrap text-body-lg">
               {current?.translation}
             </p>
           )}

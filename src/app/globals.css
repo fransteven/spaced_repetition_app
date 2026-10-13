@@ -205,6 +205,10 @@
   --color-highlight-blue: var(--highlight-blue);
   --color-highlight-pink: var(--highlight-pink);
 
+  /* Reader — AI output (translations, the reader's questions): tinted so it never reads as book text */
+  --color-reader-translation: var(--reader-translation);
+  --color-on-reader-translation: var(--on-reader-translation);
+
   /* Reader — theme swatches (fixed, never re-pointed by data-reader-theme) */
   --color-reader-sepia-surface: var(--reader-sepia-surface);
   --color-reader-sepia-on-surface: var(--reader-sepia-on-surface);
@@ -373,10 +377,16 @@
   --reader-black-surface-container:  #161718;
   --reader-black-on-surface:         #dcdddf;
   --reader-black-on-surface-variant: #a3a1b3;
+
+  /* Reader — AI output block (= primary-fixed pair; 15:1). Re-pointed per theme below. */
+  --reader-translation:    #e2dfff;
+  --on-reader-translation: #0f0069;
 }
 
 .dark {
   /* Dark shadows lean on #0a0b0c, never #000 — DESIGN.md §4 */
+  --reader-translation:    #2b2296;
+  --on-reader-translation: #e2dfff;
   --shadow-tint: rgba(10, 11, 12, 0.45);
   --shadow-tint-lg: rgba(10, 11, 12, 0.6);
 
@@ -511,6 +521,8 @@
   --outline-variant: #d9c7a7;
   --shadow-tint: rgba(53, 39, 26, 0.06);
   --shadow-tint-lg: rgba(53, 39, 26, 0.16);
+  --reader-translation:    #e2dfff;
+  --on-reader-translation: #0f0069;
   --highlight-yellow: #ffd84d;
   --highlight-green:  #8fd694;
   --highlight-blue:   #8cc3ff;
@@ -527,6 +539,8 @@
 
 /* Forces the light palette in the reader while the app is dark. */
 .dark[data-reader-theme="light"] {
+  --reader-translation:    #e2dfff;
+  --on-reader-translation: #0f0069;
   --background: var(--reader-white-surface);
   --foreground: #191c1d;
   --surface: var(--reader-white-surface);
@@ -573,6 +587,8 @@
 /* Reader dark theme: pure black page, whatever the app theme is. Chrome and
    sheets sit on near-black containers so they still read as layers. */
 [data-reader-theme="dark"] {
+  --reader-translation:    #2b2296;
+  --on-reader-translation: #e2dfff;
   --background: var(--reader-black-surface);
   --foreground: var(--reader-black-on-surface);
   --surface: var(--reader-black-surface);

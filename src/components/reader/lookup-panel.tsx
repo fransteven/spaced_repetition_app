@@ -142,7 +142,8 @@ export function LookupPanel({
       aria-label={word ? `Look up “${word}”` : 'Translate'}
       data-testid="lookup-panel"
       className={cn(
-        'fixed inset-x-2 z-30 flex max-h-[45dvh] animate-pop-in flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-ambient-lg',
+        // Tonal grey with a ghost border: a white card would melt into the white (Light) page.
+        'fixed inset-x-2 z-30 flex max-h-[45dvh] animate-pop-in flex-col overflow-hidden rounded-2xl border border-outline-variant/15 bg-surface-container-low text-on-surface shadow-ambient-lg',
         placement.vertical === 'top' ? 'top-2' : 'bottom-2',
         'sm:inset-x-auto sm:top-20 sm:bottom-14 sm:max-h-none sm:w-96',
         placement.side === 'left' ? 'sm:left-4' : 'sm:right-4'
@@ -169,7 +170,7 @@ export function LookupPanel({
           />
         </section>
         {word && (
-          <section aria-label="Dictionary" className="rounded-xl bg-surface-container-low p-4">
+          <section aria-label="Dictionary" className="rounded-xl bg-surface-container p-4">
             <p className="mb-2 text-label-sm uppercase text-on-surface-variant">Dictionary</p>
             <DictionarySection word={word} language={bookLanguage} />
           </section>

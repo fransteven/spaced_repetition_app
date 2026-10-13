@@ -13,8 +13,8 @@ import {
   Highlighter,
   List,
   Maximize,
-  MessageCircleQuestion,
   Minimize,
+  Sparkles,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -49,7 +49,7 @@ import { TocSheet } from '@/components/reader/toc-sheet';
 import { ReaderSettingsSheet } from '@/components/reader/reader-settings-sheet';
 import { LookupPanel, type LookupPlacement } from '@/components/reader/lookup-panel';
 import { lookupWord } from '@/components/reader/reader-gestures';
-import { AskSheet } from '@/components/reader/ask-sheet';
+import { AskPanel } from '@/components/reader/ask-panel';
 import { CreateCardDialog, type CardDraftSource } from '@/components/reader/create-card-dialog';
 import type { BookDeckOptions, CreatedBookCard } from '@/lib/services/book-card-service';
 import { AUTO_DETECT, toLanguageCode, type LanguageCode } from '@/lib/translation/languages';
@@ -77,11 +77,14 @@ interface Lookup {
   placement: LookupPlacement;
 }
 
-/** Puts the lookup card in the half (phones) or side (wider screens) away from the text it is about. */
-function placementFor(rect: ViewportRect): LookupPlacement {
+/**
+ * Puts the lookup card in the half (phones) or side (wider screens) away from the text it is about —
+ * and on the left while the Ask panel is docked on the right, so it never covers the chat.
+ */
+function placementFor(rect: ViewportRect, askOpen: boolean): LookupPlacement {
   return {
     vertical: rect.top + (rect.bottom - rect.top) / 2 > window.innerHeight / 2 ? 'top' : 'bottom',
-    side: rect.left + rect.width / 2 > window.innerWidth / 2 ? 'left' : 'right',
+    side: askOpen || rect.left + rect.width / 2 > window.innerWidth / 2 ? 'left' : 'right',
   };
 }
 
@@ -149,9 +152,11 @@ export function Reader({
   const chapterRef = useRef<string | null>(null);
   const lastCfiRef = useRef<string | null>(null);
   const lookupOpen = useRef(false);
+  const askOpen = useRef(false);
   useEffect(() => {
     lookupOpen.current = lookup !== null;
-  }, [lookup]);
+    askOpen.current = panel === 'ask';
+  }, [lookup, panel]);
 
   // ── Theme: <html data-reader-theme> re-points tokens for the whole page
   // (including portalled sheets) while the reader is mounted.
@@ -241,7 +246,7 @@ export function Reader({
             source: sourceFromSelection(next, chapterRef.current),
             word,
             autoTranslate: true,
-            placement: placementFor(next.rect),
+            placement: placementFor(next.rect, askOpen.current),
           }
         : null
     );
@@ -396,10 +401,11 @@ export function Reader({
 
   const openTranslate = (source: CardDraftSource, rect: ViewportRect): void => {
     dismissSelection();
-    setLookup({ source, word: lookupWord(source.quote), autoTranslate: true, placement: placementFor(rect) });
+    setLookup({ source, word: lookupWord(source.quote), autoTranslate: true, placement: placementFor(rect, panel === 'ask') });
   };
 
   const closeLookup = useCallback(() => setLookup(null), []);
+  const closeAsk = useCallback(() => setPanel(null), []);
 
   const turnPage = (direction: 1 | -1): void => {
     setLookup(null);
@@ -444,13 +450,13 @@ export function Reader({
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background text-on-surface">
-      {/* Top bar — floats over the page (like Kindle) so the text gets the full height, and toggling
-          the chrome never re-paginates. Only the pills catch taps; the gaps between them reach the page. */}
+      {/* Top bar — its own row above the page, so it never covers the text. Hiding the chrome only fades
+          it: the row keeps its height, so toggling never re-paginates. */}
       <header
         className={cn(
           // gap-1/px-2 on phones: seven 44 px pills fit in 360 px.
-          'pointer-events-none absolute inset-x-0 top-0 z-10 grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 transition-opacity duration-200 sm:gap-3 sm:px-5',
-          chromeVisible ? 'opacity-100 *:pointer-events-auto' : 'opacity-0'
+          'relative z-10 grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 transition-opacity duration-200 sm:h-16 sm:gap-3 sm:px-5',
+          chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
       >
         <div className={cn(pillGroup, 'justify-self-start')}>
@@ -499,11 +505,15 @@ export function Reader({
           <Button
             variant="ghost"
             size="icon"
-            className={pillButton}
+            className={cn(pillButton, 'sm:w-auto sm:gap-1.5 sm:px-3', panel === 'ask' && 'bg-reader-translation text-on-reader-translation')}
             aria-label="Ask this book"
-            onClick={() => setPanel('ask')}
+            aria-pressed={panel === 'ask'}
+            onClick={() => setPanel((current) => (current === 'ask' ? null : 'ask'))}
           >
-            <MessageCircleQuestion />
+            <Sparkles />
+            <span aria-hidden className="text-body-sm font-semibold max-sm:hidden">
+              Ask
+            </span>
           </Button>
           <Button
             variant="ghost"
@@ -529,59 +539,74 @@ export function Reader({
         </div>
       </header>
 
-      {/* The page stays marked while the chrome is hidden, like a ribbon. */}
+      {/* The page stays marked while the chrome is hidden, like a ribbon (in the empty top row). */}
       {pageBookmark && !chromeVisible && (
         <Bookmark aria-hidden className="pointer-events-none absolute right-1 top-0 size-5 fill-primary text-primary pointer-fine:right-10" />
       )}
 
-      {/* Page. Only the side margins (and swipes) turn pages: a tap on the text never does, so
-          selecting a word near the edge can't flip the page. Touch screens get narrow 24 px margins
-          (swipes are the main way to turn) so the text uses most of the width. */}
-      <main className="relative flex min-h-0 flex-1 items-stretch">
-        <button
-          type="button"
-          aria-label="Previous page"
-          data-testid="page-prev"
-          onClick={() => turnPage(-1)}
-          disabled={location?.atStart}
-          className="group flex w-6 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible pointer-fine:w-14 pointer-fine:lg:w-16"
-        >
-          <ChevronLeft className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
-        </button>
-        <div className="relative min-w-0 flex-1 py-2">
-          <div ref={setContainer} className={cn('h-full w-full', status !== 'ready' && 'invisible')} />
-          {status !== 'ready' && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-body-md text-on-surface-variant">
-                {status === 'error' ? 'This book could not be opened.' : 'Opening book…'}
-              </p>
+      {/* Book (with its footer) and, when open, the Ask panel: beside it from md, below it on phones.
+          Opening the panel shrinks the book, which re-paginates in place (see remeasure in use-epub-reader). */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Page. Only the side margins (and swipes) turn pages: a tap on the text never does, so
+              selecting a word near the edge can't flip the page. Touch screens get narrow 24 px margins
+              (swipes are the main way to turn) so the text uses most of the width. */}
+          <main className="relative flex min-h-0 flex-1 items-stretch">
+            <button
+              type="button"
+              aria-label="Previous page"
+              data-testid="page-prev"
+              onClick={() => turnPage(-1)}
+              disabled={location?.atStart}
+              className="group flex w-6 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible pointer-fine:w-14 pointer-fine:lg:w-16"
+            >
+              <ChevronLeft className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+            </button>
+            <div className="relative min-w-0 flex-1 py-2">
+              <div ref={setContainer} className={cn('h-full w-full', status !== 'ready' && 'invisible')} />
+              {status !== 'ready' && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <p className="text-body-md text-on-surface-variant">
+                    {status === 'error' ? 'This book could not be opened.' : 'Opening book…'}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <button
-          type="button"
-          aria-label="Next page"
-          data-testid="page-next"
-          onClick={() => turnPage(1)}
-          disabled={location?.atEnd}
-          className="group flex w-6 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible pointer-fine:w-14 pointer-fine:lg:w-16"
-        >
-          <ChevronRight className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
-        </button>
-      </main>
+            <button
+              type="button"
+              aria-label="Next page"
+              data-testid="page-next"
+              onClick={() => turnPage(1)}
+              disabled={location?.atEnd}
+              className="group flex w-6 shrink-0 items-center justify-center text-on-surface-variant disabled:invisible pointer-fine:w-14 pointer-fine:lg:w-16"
+            >
+              <ChevronRight className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+            </button>
+          </main>
 
-      {/* Footer — page position, like Apple Books */}
-      <footer className="flex min-h-8 shrink-0 pb-[env(safe-area-inset-bottom)] flex-col items-center justify-center gap-1 px-4">
-        <p className="text-body-sm tabular text-on-surface-variant" aria-live="polite" data-testid="page-label">
-          {pageLabel}
-        </p>
-        <MasteryThread
-          value={Math.round((location?.progress ?? 0) * 100)}
-          tone="primary"
-          animate={false}
-          className={cn('w-24 transition-opacity', chromeVisible ? 'opacity-100' : 'opacity-0')}
+          {/* Footer — page position, like Apple Books */}
+          <footer className="flex min-h-8 shrink-0 pb-[env(safe-area-inset-bottom)] flex-col items-center justify-center gap-1 px-4">
+            <p className="text-body-sm tabular text-on-surface-variant" aria-live="polite" data-testid="page-label">
+              {pageLabel}
+            </p>
+            <MasteryThread
+              value={Math.round((location?.progress ?? 0) * 100)}
+              tone="primary"
+              animate={false}
+              className={cn('w-24 transition-opacity', chromeVisible ? 'opacity-100' : 'opacity-0')}
+            />
+          </footer>
+        </div>
+
+        <AskPanel
+          open={panel === 'ask'}
+          onClose={closeAsk}
+          bookId={book.id}
+          positionHref={location?.href ?? null}
+          onOpenSource={(source) => void reader.goToPassage(source.href, source.locator)}
+          className="h-1/2 shrink-0 rounded-t-2xl shadow-ambient-lg md:h-auto md:w-96 md:rounded-none md:shadow-none lg:w-md"
         />
-      </footer>
+      </div>
 
       {selection && (
         <SelectionToolbar
@@ -654,17 +679,6 @@ export function Reader({
           onClose={closeLookup}
         />
       )}
-
-      <AskSheet
-        open={panel === 'ask'}
-        onOpenChange={(open) => setPanel(open ? 'ask' : null)}
-        bookId={book.id}
-        positionHref={location?.href ?? null}
-        onOpenSource={(source) => {
-          setPanel(null);
-          void reader.goToPassage(source.href, source.locator);
-        }}
-      />
 
       <TocSheet
         open={panel === 'toc'}
