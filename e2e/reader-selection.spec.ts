@@ -7,7 +7,7 @@ import { openReader, probe, type WordBox } from './reader-probe';
  * - Only the side margins (and swipes) turn pages; tapping or selecting text never does.
  * - Only a pointer held in the side margin turns the page under a selection (inside the chapter);
  *   the browser's autoscroll never does.
- * - A single word opens the dictionary card (no blur, no paid translation until asked).
+ * - A single word opens the lookup card: the AI translation starts at once, the dictionary below (no blur).
  */
 
 const isTouch = (page: Page): boolean => page.viewportSize() !== null && (page.viewportSize()?.width ?? 0) < 1000;
@@ -63,7 +63,7 @@ test('the side margins turn pages: narrow on touch screens, 44 px or more with a
   await expect.poll(() => probe.scrollLeft(page)).toBe(start);
 });
 
-test('a single word opens the dictionary card without blurring the book or calling the AI', async ({ page }) => {
+test('a single word opens the lookup card: translation starts at once, dictionary below, no blur', async ({ page }) => {
   const serverActions: string[] = [];
   page.on('request', (request) => {
     if (request.method() === 'POST' && request.headers()['next-action']) serverActions.push(request.url());
@@ -78,11 +78,13 @@ test('a single word opens the dictionary card without blurring the book or calli
   await expect(panel).toBeVisible();
   await expect(panel).toContainText(`Definition of ${word!.text}.`);
   await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
-  await expect(panel.getByRole('button', { name: /Translate to/ })).toBeVisible();
+  // The translation section comes first, the dictionary entry below it.
+  const sections = await panel.locator('section[aria-label]').evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')));
+  expect(sections).toEqual(['Translation', 'Dictionary']);
 
   expect(await probe.blurred(page)).toEqual([]);
   expect(await probe.selectionText(page)).toBe(word!.text); // the word stays selected
-  expect(serverActions).toEqual([]); // the translation waits for its button
+  await expect.poll(() => serverActions.length).toBeGreaterThan(0); // the translation started without a tap
 
   // Neither the card nor the toolbar covers the word they are about.
   expect(overlaps((await panel.boundingBox())!, word!)).toBe(false);
@@ -105,6 +107,58 @@ test('a phrase shows the actions toolbar but no dictionary card', async ({ page 
   }
   await page.waitForTimeout(500);
   await expect(page.getByTestId('lookup-panel')).toHaveCount(0);
+});
+
+test('a highlight stays over its words when the text reflows (the book font loading late)', async ({ page }) => {
+  const words = await probe.words(page);
+  const index = Math.floor(words.length / 2);
+  await probe.select(page, index, index + 2);
+  await page.getByRole('button', { name: 'Highlight yellow' }).click();
+  await expect.poll(async () => (await probe.highlightRects(page)).length).toBeGreaterThan(0);
+
+  // A late font swap reflows the text without resizing the page; epub.js alone would leave the boxes behind.
+  await page.evaluate(() => {
+    const doc = document.querySelector<HTMLIFrameElement>('.epub-container iframe')?.contentDocument;
+    if (!doc) return;
+    doc.body.style.setProperty('letter-spacing', '0.12em', 'important');
+    doc.fonts.dispatchEvent(new Event('loadingdone'));
+  });
+
+  const aligned = async (): Promise<boolean> => {
+    const [text, marks] = [await probe.selectedRects(page), await probe.highlightRects(page)];
+    return (
+      text.length > 0 &&
+      text.every((rect) => marks.some((mark) => Math.abs(mark.x - rect.x) <= 2 && Math.abs(mark.y - rect.y) <= 2))
+    );
+  };
+  await expect.poll(aligned).toBe(true);
+
+  // Leave the shared e2e book without highlights.
+  const [first] = await probe.selectedRects(page);
+  await tap(page, first.x + first.width / 2, first.y + first.height / 2);
+  await page.getByRole('button', { name: 'Delete highlight' }).click();
+  await expect.poll(async () => (await probe.highlightRects(page)).length).toBe(0);
+});
+
+test('full screen and browser bars resizing the page never cut the last lines off', async ({ page }) => {
+  test.skip(test.info().project.name !== 'android-chrome', 'a real viewport resize, one project is enough');
+  const size = page.viewportSize()!;
+  const overflow = (): Promise<number> =>
+    page.evaluate(() => {
+      const scroller = document.querySelector('.epub-container')?.getBoundingClientRect();
+      const frame = document.querySelector('.epub-container iframe')?.getBoundingClientRect();
+      const footer = document.querySelector('footer')?.getBoundingClientRect();
+      if (!scroller || !frame || !footer) return Number.POSITIVE_INFINITY;
+      // How far the page (iframe) reaches past what is visible above the footer.
+      return Math.max(frame.bottom - scroller.bottom, scroller.bottom - footer.top);
+    });
+
+  // Full screen hides the bars (taller), leaving it brings them back (shorter), in animated steps.
+  for (const height of [size.height + 60, size.height + 120, size.height - 40, size.height]) {
+    await page.setViewportSize({ width: size.width, height });
+    await page.waitForTimeout(80);
+  }
+  await expect.poll(overflow, { timeout: 5000 }).toBeLessThanOrEqual(1);
 });
 
 test('while text is selected, the book does not scroll under the finger', async ({ page }) => {

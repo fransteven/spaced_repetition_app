@@ -20,7 +20,7 @@ interface LookupPanelProps {
   bookId: string;
   bookLanguage: string | null;
   passage: Passage;
-  /** Set for a single selected word: show its dictionary entry (translation waits for the button). */
+  /** Set for a single selected word: its dictionary entry is shown below the translation. */
   word: string | null;
   autoTranslate: boolean;
   placement: LookupPlacement;
@@ -155,12 +155,7 @@ export function LookupPanel({
         </Button>
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pb-5">
-        {word && (
-          <section aria-label="Dictionary" className="rounded-xl bg-surface-container-low p-4">
-            <p className="mb-2 text-label-sm uppercase text-on-surface-variant">Dictionary</p>
-            <DictionarySection word={word} language={bookLanguage} />
-          </section>
-        )}
+        {/* Translation first (it is what a word lookup is for), the dictionary entry below it. */}
         <section aria-label="Translation">
           <TranslateSection
             key={`${autoTranslate}|${passage.text}`}
@@ -173,6 +168,12 @@ export function LookupPanel({
             onCreateCard={onCreateCard}
           />
         </section>
+        {word && (
+          <section aria-label="Dictionary" className="rounded-xl bg-surface-container-low p-4">
+            <p className="mb-2 text-label-sm uppercase text-on-surface-variant">Dictionary</p>
+            <DictionarySection word={word} language={bookLanguage} />
+          </section>
+        )}
       </div>
     </div>
   );

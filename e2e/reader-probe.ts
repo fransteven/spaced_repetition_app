@@ -24,6 +24,17 @@ export interface ProbeApi {
   selectionText: () => string;
   pushScroll: (delta: number) => void;
   blurredElements: () => string[];
+  /** Boxes of the text last passed to select() (the range is live, so they follow reflows). */
+  selectedRects: () => Box[];
+  /** Boxes epub.js draws for saved highlights. */
+  highlightRects: () => Box[];
+}
+
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 declare global {
@@ -35,6 +46,9 @@ declare global {
 function installProbe(): void {
   const scroller = (): HTMLElement | null => document.querySelector<HTMLElement>('.epub-container');
   const frame = (): HTMLIFrameElement | null => document.querySelector<HTMLIFrameElement>('.epub-container iframe');
+
+  let lastSelected: Range | null = null;
+  const toBox = (rect: DOMRect, dx = 0, dy = 0): Box => ({ x: rect.left + dx, y: rect.top + dy, width: rect.width, height: rect.height });
 
   interface WordRange extends WordBox {
     range: Range;
@@ -85,9 +99,19 @@ function installProbe(): void {
       const selection = doc.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(range);
+      lastSelected = range.cloneRange();
       return { text: range.toString(), x: first.x, y: first.y, width: last.x + last.width - first.x, height: first.height };
     },
     selectionText: () => frame()?.contentDocument?.getSelection()?.toString() ?? '',
+    selectedRects: () => {
+      const offset = frame()?.getBoundingClientRect();
+      if (!lastSelected || !offset) return [];
+      return Array.from(lastSelected.getClientRects())
+        .filter((rect) => rect.width > 0)
+        .map((rect) => toBox(rect, offset.left, offset.top));
+    },
+    highlightRects: () =>
+      Array.from(document.querySelectorAll('.epub-view > svg g.nc-highlight rect')).map((rect) => toBox(rect.getBoundingClientRect())),
     pushScroll: (delta) => {
       const element = scroller();
       if (element) element.scrollLeft += delta;
@@ -144,6 +168,8 @@ export const probe = {
   select: (page: Page, from: number, to: number = from): Promise<WordBox | null> =>
     page.evaluate(([a, b]) => window.e2eProbe?.select(a, b) ?? null, [from, to] as const),
   selectionText: (page: Page): Promise<string> => page.evaluate(() => window.e2eProbe?.selectionText() ?? ''),
+  selectedRects: (page: Page): Promise<Box[]> => page.evaluate(() => window.e2eProbe?.selectedRects() ?? []),
+  highlightRects: (page: Page): Promise<Box[]> => page.evaluate(() => window.e2eProbe?.highlightRects() ?? []),
   blurred: (page: Page): Promise<string[]> => page.evaluate(() => window.e2eProbe?.blurredElements() ?? []),
   /** Simulates the browser autoscrolling the book (what a selection handle dragged to the edge does). */
   pushFor: (page: Page, delta: number, durationMs: number): Promise<void> =>

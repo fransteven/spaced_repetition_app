@@ -205,16 +205,81 @@ function isForward(selection: Selection, doc: Document): boolean {
   return !probe.collapsed || (selection.anchorNode === selection.focusNode && selection.anchorOffset <= selection.focusOffset);
 }
 
+/**
+ * Boxes of the characters a range covers. Zero-width boxes are left out: at a line wrap the range's end
+ * reports one at the start of the next line, which on the last line of a page lies in the next column.
+ */
+function textRects(range: Range): DOMRect[] {
+  return Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+}
+
 /** Viewport x of the selection's moving end (its focus). */
 function focusX(range: Range, forward: boolean): number | null {
   const frame = range.startContainer.ownerDocument?.defaultView?.frameElement;
-  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
+  const rects = textRects(range);
   const edge = forward ? rects.at(-1) : rects[0];
   if (!frame || !edge) return null;
   return frame.getBoundingClientRect().left + (forward ? edge.right : edge.left);
 }
 
+/** Text position under a point of a document (coordinates of that document's viewport). */
+function caretAt(doc: Document, x: number, y: number): { node: Node; offset: number } | null {
+  if (typeof doc.caretPositionFromPoint === 'function') {
+    const position = doc.caretPositionFromPoint(x, y);
+    return position ? { node: position.offsetNode, offset: position.offset } : null;
+  }
+  if (typeof doc.caretRangeFromPoint === 'function') {
+    const range = doc.caretRangeFromPoint(x, y);
+    return range ? { node: range.startContainer, offset: range.startOffset } : null;
+  }
+  return null;
+}
+
+/** Same start and end as the selection that was last reported (a selectionchange that changed nothing). */
+interface RangeEnds {
+  startContainer: Node;
+  startOffset: number;
+  endContainer: Node;
+  endOffset: number;
+}
+
+function sameEnds(range: Range, ends: RangeEnds | null): boolean {
+  return (
+    ends !== null &&
+    range.startContainer === ends.startContainer &&
+    range.startOffset === ends.startOffset &&
+    range.endContainer === ends.endContainer &&
+    range.endOffset === ends.endOffset
+  );
+}
+
 const MARKS_REPAINT_MS = 50;
+
+/**
+ * Re-measures every highlight. epub.js's marks pane computes the SVG boxes once, when a mark is added,
+ * and again only when the page iframe is resized; text that reflows without a resize (the book font
+ * finishing loading — Literata swaps in after the fallback — or a typography change) leaves the boxes
+ * over the wrong words.
+ */
+function refreshMarkPanes(rendition: Rendition): void {
+  const views: unknown = rendition.views();
+  const list: unknown = views && typeof views === 'object' && 'all' in views && typeof views.all === 'function' ? views.all() : views;
+  if (!Array.isArray(list)) return;
+  for (const view of list) {
+    const pane: unknown = view && typeof view === 'object' && 'pane' in view ? view.pane : null;
+    if (pane && typeof pane === 'object' && 'render' in pane && typeof pane.render === 'function') pane.render();
+  }
+}
+
+/** Lays the book out again at the container's current size (no-op when the size has not changed). */
+function remeasure(rendition: Rendition): void {
+  // epub.js's own trigger is the window resize event, which on Android can fire mid-animation when
+  // full screen starts or ends; `manager` is not in the typings, so it is reached through a guard.
+  const manager: unknown = Reflect.get(rendition, 'manager');
+  if (manager && typeof manager === 'object' && 'resize' in manager && typeof manager.resize === 'function') {
+    manager.resize();
+  }
+}
 
 /**
  * Forces the browser to repaint epub.js's marks pane (the SVG over the page that draws highlights).
@@ -367,9 +432,17 @@ export function useEpubReader(options: Options): EpubReader {
     }
   }, [displayAnchor, releaseAnchorAfter]);
 
+  /** Puts every highlight back over its text and makes the browser paint it (see refreshMarkPanes). */
+  const refreshMarks = useCallback((): void => {
+    const rendition = renditionRef.current;
+    if (!rendition) return;
+    refreshMarkPanes(rendition);
+    repaintMarks(latest.current.container);
+  }, []);
+
   // ── Selection ───────────────────────────────────────────────────────────
   const selectionContents = useRef<Contents | null>(null);
-  const ignoreSelectionChange = useRef(false);
+  const reportedEnds = useRef<RangeEnds | null>(null);
   const touchSelectionChanged = useRef(false);
 
   /** Visible page box (the epub.js scroller), in viewport coordinates. */
@@ -388,22 +461,31 @@ export function useEpubReader(options: Options): EpubReader {
     return null;
   }, [pageBox]);
 
-  /** Pulls the moving end back onto the page: text the reader cannot see is never part of the selection. */
+  /**
+   * Pulls the moving end back onto the page: text the reader cannot see is never part of the selection.
+   * Only run once the selection has settled (never while a handle is being dragged, where it would fight
+   * the finger). The end goes to the last (or first) character still visible on the page.
+   */
   const clampToPage = useCallback((contents: Contents): void => {
-    const rendition = renditionRef.current;
     const selection = contents.window.getSelection();
     const side = focusOutside(contents);
-    const current: unknown = rendition?.location;
-    if (!rendition || !selection || !side || !current || typeof current !== 'object' || !('start' in current)) return;
+    const box = pageBox();
+    const frame = contents.window.frameElement;
+    if (!selection || !side || !box || !frame || selection.rangeCount === 0) return;
+    const frameLeft = frame.getBoundingClientRect().left;
+    const visible = textRects(selection.getRangeAt(0)).filter(
+      (rect) => frameLeft + rect.left >= box.left - 1 && frameLeft + rect.right <= box.right + 1
+    );
+    const edge = side === 1 ? visible.at(-1) : visible[0];
+    if (!edge) return;
+    const caret = caretAt(contents.document, side === 1 ? edge.right - 1 : edge.left + 1, edge.top + edge.height / 2);
+    if (!caret || caret.node.ownerDocument !== contents.document) return;
     try {
-      const edge = rendition.getRange(side === 1 ? rendition.location.end.cfi : rendition.location.start.cfi);
-      if (!edge || edge.startContainer.ownerDocument !== contents.document) return;
-      ignoreSelectionChange.current = true;
-      selection.extend(edge.startContainer, edge.startOffset);
+      selection.extend(caret.node, caret.offset);
     } catch {
-      ignoreSelectionChange.current = false; // a CFI this layout cannot resolve: keep the selection as it is
+      // A position the selection cannot reach: keep it as it is.
     }
-  }, [focusOutside]);
+  }, [focusOutside, pageBox]);
 
   /** Forgets the selection and stops guarding the page (the DOM selection is left alone). */
   const endSelection = useCallback((): void => {
@@ -413,6 +495,7 @@ export function useEpubReader(options: Options): EpubReader {
     window.clearTimeout(edgeTimer.current);
     edgeTimer.current = undefined;
     window.clearTimeout(settleTimer.current);
+    reportedEnds.current = null;
     if (selectionReported.current) {
       selectionReported.current = false;
       latest.current.onSelect(null);
@@ -434,6 +517,13 @@ export function useEpubReader(options: Options): EpubReader {
       return;
     }
     selectionReported.current = true;
+    // The clamp above changes the selection: its selectionchange arrives later and must not hide this report.
+    reportedEnds.current = {
+      startContainer: range.startContainer,
+      startOffset: range.startOffset,
+      endContainer: range.endContainer,
+      endOffset: range.endOffset,
+    };
     latest.current.onSelect({ cfiRange, text, context: contextFor(range, text), rect });
   }, [clampToPage]);
 
@@ -448,30 +538,27 @@ export function useEpubReader(options: Options): EpubReader {
   }, [reportSelection]);
 
   const handleSelectionChange = useCallback((contents: Contents): void => {
-    if (ignoreSelectionChange.current) {
-      ignoreSelectionChange.current = false;
-      return;
-    }
     const selection = contents.window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
       if (selectionActive.current) endSelection();
       return;
     }
+    // Already reported exactly as it is now (e.g. the event of our own clamp): nothing moved.
+    if (selectionReported.current && sameEnds(selection.getRangeAt(0), reportedEnds.current)) return;
     if (!selectionActive.current) {
       selectionActive.current = true;
       pageLeft.current = scroller.current?.scrollLeft ?? 0;
     }
     selectionContents.current = contents;
     touchSelectionChanged.current = true;
-    // Text the reader cannot see never joins the selection, so the browser has nothing off-page to scroll to.
-    clampToPage(contents);
+    reportedEnds.current = null;
     // Hide the toolbar (and the lookup) while the selection is still moving.
     if (selectionReported.current) {
       selectionReported.current = false;
       latest.current.onSelect(null);
     }
     scheduleReport(SELECTION_SETTLE_MS);
-  }, [clampToPage, endSelection, scheduleReport]);
+  }, [endSelection, scheduleReport]);
 
   /** Turns the page under a selection, inside its section (the selection lives in that section's iframe). */
   const turnAtEdge = useCallback(async (direction: PageDirection): Promise<void> => {
@@ -547,6 +634,8 @@ export function useEpubReader(options: Options): EpubReader {
     if (!container) return;
     let cancelled = false;
     let touchStart: { x: number; y: number; at: number; movedAt: number | null } | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    let remeasureTimer: number | undefined;
 
     const init = async (): Promise<void> => {
       const response = await fetch(`/api/books/${bookId}/file`);
@@ -581,6 +670,10 @@ export function useEpubReader(options: Options): EpubReader {
       rendition.hooks.content.register((contents: Contents) => {
         applyStyle(contents, latest.current.css, latest.current.language);
         const doc = contents.document;
+        // The book font arrives after the first paint (font-display: swap) and reflows the text.
+        const refresh = (): void => refreshMarks();
+        void doc.fonts.ready.then(refresh);
+        doc.fonts.addEventListener('loadingdone', refresh);
         // Our own selection pipeline (epub.js's "selected" fires mid-drag and knows nothing about the finger).
         doc.addEventListener('selectionchange', () => handleSelectionChange(contents));
         doc.addEventListener('pointerdown', () => {
@@ -617,6 +710,7 @@ export function useEpubReader(options: Options): EpubReader {
       });
 
       rendition.on('relocated', (location: Location) => {
+        refreshMarks();
         checkAnchor(location);
         report(location);
         if (!selectionActive.current) latest.current.onSelect(null);
@@ -692,6 +786,15 @@ export function useEpubReader(options: Options): EpubReader {
         scroller.current = element;
         element.addEventListener('scroll', guardScroll);
       }
+      // Full screen, the browser bars and rotation resize the page; lay it out again once that settles,
+      // so the iframe never stays taller than the page (the last lines were cut off at the bottom).
+      resizeObserver = new ResizeObserver(() => {
+        window.clearTimeout(remeasureTimer);
+        remeasureTimer = window.setTimeout(() => {
+          if (renditionRef.current) remeasure(renditionRef.current);
+        }, RESIZE_SETTLE_MS);
+      });
+      resizeObserver.observe(container);
       setStatus('ready');
 
       // Page numbers: reuse cached locations or generate them once.
@@ -717,6 +820,8 @@ export function useEpubReader(options: Options): EpubReader {
 
     return () => {
       cancelled = true;
+      resizeObserver?.disconnect();
+      window.clearTimeout(remeasureTimer);
       window.clearTimeout(anchorTimer.current);
       endSelection();
       scroller.current?.removeEventListener('scroll', guardScroll);
@@ -741,6 +846,7 @@ export function useEpubReader(options: Options): EpubReader {
     handleSelectionChange,
     pageBox,
     pushEdge,
+    refreshMarks,
     scheduleReport,
   ]);
 
@@ -751,8 +857,9 @@ export function useEpubReader(options: Options): EpubReader {
     const rendition = renditionRef.current;
     if (!rendition || status !== 'ready') return;
     contentsList(rendition).forEach((contents) => applyStyle(contents, css, latest.current.language));
+    refreshMarks();
     restoreAnchor(60);
-  }, [css, status, restoreAnchor]);
+  }, [css, status, restoreAnchor, refreshMarks]);
 
   // One column or two pages: epub.js re-paginates, so hold the reader's place through it.
   const { twoPages } = options;
@@ -807,8 +914,8 @@ export function useEpubReader(options: Options): EpubReader {
       );
       highlighted.current.push(annotation.cfi_range);
     }
-    repaintMarks(latest.current.container);
-  }, []);
+    refreshMarks();
+  }, [refreshMarks]);
 
   /**
    * Jumps to a passage known only by its section (zip path, from the server)

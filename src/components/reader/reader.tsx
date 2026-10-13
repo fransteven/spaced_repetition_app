@@ -228,14 +228,11 @@ export function Reader({
     []
   );
 
-  // A settled single-word selection opens the dictionary right away (like Kindle); the translation
-  // waits for its button so a highlight that starts on one word never spends the daily AI cap.
+  // A settled single-word selection opens the lookup card right away (like Kindle): the AI translation
+  // starts at once (only a translation-cache miss counts against the daily cap), with the dictionary below.
   const handleSelect = useCallback((next: TextSelection | null) => {
     setSelection(next);
-    if (!next) {
-      setLookup((current) => (current?.word && !current.autoTranslate ? null : current));
-      return;
-    }
+    if (!next) return; // the card stays until it is closed, the page turns or another selection replaces it
     setActiveHighlight(null);
     const word = lookupWord(next.text);
     setLookup(
@@ -243,7 +240,7 @@ export function Reader({
         ? {
             source: sourceFromSelection(next, chapterRef.current),
             word,
-            autoTranslate: false,
+            autoTranslate: true,
             placement: placementFor(next.rect),
           }
         : null
@@ -574,7 +571,7 @@ export function Reader({
       </main>
 
       {/* Footer — page position, like Apple Books */}
-      <footer className="flex h-8 shrink-0 flex-col items-center justify-center gap-1 px-4">
+      <footer className="flex min-h-8 shrink-0 pb-[env(safe-area-inset-bottom)] flex-col items-center justify-center gap-1 px-4">
         <p className="text-body-sm tabular text-on-surface-variant" aria-live="polite" data-testid="page-label">
           {pageLabel}
         </p>
