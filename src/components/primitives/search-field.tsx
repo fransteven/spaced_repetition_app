@@ -4,8 +4,12 @@ import * as React from 'react';
 import { Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
-export interface SearchFieldProps {
+export interface SearchFieldProps extends Pick<
+  React.ComponentProps<'input'>,
+  'role' | 'aria-label' | 'aria-controls' | 'aria-expanded' | 'aria-activedescendant' | 'aria-autocomplete'
+> {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -23,6 +27,7 @@ export function SearchField({
   autoFocus,
   onKeyDown,
   inputRef,
+  ...accessibilityProps
 }: SearchFieldProps): React.JSX.Element {
   return (
     <div
@@ -34,6 +39,8 @@ export function SearchField({
     >
       <Search className="ml-3 h-4 w-4 shrink-0 text-outline" />
       <Input
+        {...accessibilityProps}
+        aria-label={accessibilityProps['aria-label'] ?? placeholder}
         ref={inputRef}
         type="search"
         value={value}
@@ -41,17 +48,19 @@ export function SearchField({
         placeholder={placeholder}
         autoFocus={autoFocus}
         onKeyDown={onKeyDown}
-        className="h-9 w-full border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
+        className="h-11 w-full border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
       />
       {value ? (
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           type="button"
           onClick={() => onChange('')}
           aria-label="Clear search"
-          className="mr-3 flex items-center justify-center text-outline transition-colors hover:text-on-surface cursor-pointer"
+          className="mr-1 size-11 text-outline hover:text-on-surface"
         >
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       ) : null}
     </div>
   );

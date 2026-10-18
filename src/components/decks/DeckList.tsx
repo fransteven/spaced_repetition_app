@@ -14,6 +14,7 @@ import { FilterChip } from '@/components/primitives/filter-chip';
 import { SearchField } from '@/components/primitives/search-field';
 import { NoResults } from '@/components/primitives/no-results';
 import { PageSection } from '@/components/layout/page-header';
+import { DeckFontSizeSelector } from '@/components/decks/deck-font-size-selector';
 import { useListSearch } from '@/hooks/use-list-search';
 
 interface DeckListProps {
@@ -105,6 +106,8 @@ export function DeckList({ decks }: DeckListProps): React.JSX.Element {
             </FilterChip>
           ))}
         </div>
+
+        <DeckFontSizeSelector />
 
         <SearchField
           value={query}

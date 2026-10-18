@@ -26,8 +26,12 @@ export function useStudyHotkeys({ revealed, disabled, onToggleReveal, onRate }: 
     if (disabled) return
 
     const handler = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return
       if (isTextEntry(e.target)) return
+      // Controls and portalled font-size options own Enter/Space and number keys.
+      if (e.target instanceof Element && e.target.closest(
+        'button, a, [role="combobox"], [role="listbox"], [role="option"], [role="dialog"]'
+      )) return
 
       if (e.key === " " || e.key === "Enter") {
         // Space scrolls the page by default.

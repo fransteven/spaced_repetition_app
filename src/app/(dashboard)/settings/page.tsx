@@ -19,7 +19,7 @@ export default async function SettingsPage(): Promise<React.JSX.Element> {
   return (
     <>
       <PageHeader>
-        <h1 className="mb-2 text-display-lg text-on-surface">Settings</h1>
+        <h1 className="mb-2 text-display-sm sm:text-display-md text-on-surface">Settings</h1>
         <p className="max-w-lg text-body-lg text-on-surface-variant">
           Manage the skills the AI examiner draws on during study sessions.
         </p>

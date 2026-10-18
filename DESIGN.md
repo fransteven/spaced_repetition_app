@@ -185,10 +185,11 @@ Todas las animaciones están implementadas en CSS puro y respetan de manera estr
 El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y cero animaciones continuas mientras se lee.
 
 ### Tema del lector
-- Mientras el lector está montado, `<html>` lleva `data-reader-theme` (`sepia` · `light` · `dark`; `auto` no lo pone). Los bloques de `globals.css` re-apuntan los tokens base, así primitivos y sheets en portal siguen el tema sin clases `dark:`.
+- Mientras el lector está montado, `<html>` lleva `data-reader-theme` (`sepia` · `light` · `dark` · `paper` · `sage` · `slate`; `auto` no lo pone). Los bloques de `globals.css` re-apuntan los tokens base, así primitivos y sheets en portal siguen el tema sin clases `dark:`.
 - **Sepia (default, estilo Apple Books):** `--reader-sepia-surface #f1e3ca`, `--reader-sepia-surface-container #fef3e2`, `--reader-sepia-on-surface #35271a`, `--reader-sepia-on-surface-variant #6e6350` (≥ 4.5:1; el `#847861` de Apple Books no cumple).
 - **Light = blanco puro (estilo Kindle):** `--reader-white-surface #ffffff` en página y `<meta name="theme-color">`; texto `#191c1d`. El canvas de la app sigue en `#f8f9fa`.
 - **Dark = negro puro (OLED):** `--reader-black-surface #000000` en página y `<meta name="theme-color">`; texto `--reader-black-on-surface #dcdddf` (no blanco puro, evita halación); chrome/sheets sobre `--reader-black-surface-container #161718`. Aplica tanto con la app en claro como en oscuro.
+- **Paper:** marfil `#faf6ed`, texto `#322d25`. **Sage:** verde grisáceo `#e8eee5`, texto `#25312a`. **Slate:** azul grisáceo oscuro `#18232d`, texto `#dce4ec`; se clasifica como oscuro para adaptar el contenido y los resaltados. Los temas explícitos son independientes del tema global de la app.
 - El contenido del libro vive en un iframe: `src/components/reader/reader-theme.ts` lee los tokens resueltos y los inyecta como CSS. Nunca hex en ese archivo.
 
 ### Resaltados
@@ -197,8 +198,15 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
 
 ### Tipografía del libro
 - `book` (default): `"Iowan Old Style", "Charter", "Literata", Georgia, serif` (`font-reader`). Literata está self-hosted en `public/fonts/literata/` (OFL). Fraunces **no** se usa para cuerpo de lectura.
-- `sans`: Inter · `original`: fuente de la editorial.
-- Tamaño base 125 % × escala (0.8–1.6), interlineado 1.55, alineación izquierda con `hyphens: auto` (justificado opcional), doble columna ≥ 1000 px.
+- `sans`: Inter local (familia `Reader Sans`) · `original`: fuente de la editorial.
+- Opciones explícitas: `literata` (Literata), `source` (Source Serif 4) y `atkinson` (Atkinson Hyperlegible). Todas las fuentes de lectura tienen WOFF2 normal/negrita/cursiva y Latin Extended, con licencias SIL OFL en `public/fonts/<familia>/LICENSE`. Se cargan tanto en las muestras como en el iframe, sin servicios externos.
+- Tamaño base 112.5 % × escala (0.7–1.6), interlineado predeterminado 1.45, alineación izquierda con `hyphens: auto` (justificado opcional), doble columna ≥ 1000 px.
+
+### Ajustes y enfoque
+- Catálogo compartido en `src/lib/reader-options.ts`: siete temas, seis fuentes y presets Editorial (Sepia/Literata/100 %/1.45), Rest (Paper/Atkinson/110 %/1.8) y Night (Slate/Literata/100 %/1.6). Los presets usan izquierda y una columna; aplicar uno cambia todos los controles a la vez. Ajustar después desactiva su selección cuando deja de coincidir. No existe una columna de preset en DB.
+- Sheet: cabecera editorial, presets, vista previa en un iframe sin scripts, temas, fuentes y controles existentes; acciones y estado de sincronización al pie. Original indica que la fuente editorial se ve en el libro. No se cambian las preferencias existentes al desplegar.
+- Guardado inmediato en pantalla, debounce y escrituras serializadas; cierre/ocultación de pestaña/salida vacían la cola pendiente. Fallos muestran un estado visible y Retry, sin revertir la elección local.
+- Start reading cierra ajustes y oculta el chrome sin cambiar su geometría. La barra oculta es `inert`, por lo que no recibe foco. Tap recupera controles; Escape también desde el iframe, dando prioridad a paneles y diálogos abiertos. La pantalla completa conserva su comportamiento anterior.
 
 ### Chrome
 - Barra superior: fila propia encima de la página (`h-14 sm:h-16`, **nunca flota sobre el texto**). Grupos de pills `rounded-full bg-card shadow-ambient` (izq.: volver, índice, notas · der.: marcador, Ask, ajustes, pantalla completa), título centrado en `text-body-sm font-semibold`. Ocultar el chrome solo lo desvanece: la fila conserva su alto.
@@ -272,3 +280,9 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
   </Button>
 ))}
 ```
+
+## 12. Legibilidad de mazos y tarjetas
+
+El selector **Text size** está disponible en `/decks`, `/decks/[id]` y `/study/[id]`. El contenido de lectura usa 18 px por defecto (`text-lg`); el usuario puede elegir 20 px (`text-xl`) o 24 px (`text-headline-md font-normal`). El contrato compartido está en `src/lib/deck-typography.ts`, y sustituye `body-md` para descripciones y caras de tarjetas. Títulos y metadatos del listado también aumentan con la selección. No recortar descripciones ni preguntas/respuestas a un número fijo de líneas.
+
+La preferencia se conserva localmente en este navegador y se comparte entre mazos, detalle y estudio; no afecta el lector EPUB ni el tamaño global de los controles. `useDeckFontSize()` sincroniza las vistas y pestañas sin consultar el backend. Los atajos de estudio ceden el teclado a controles y opciones del selector.

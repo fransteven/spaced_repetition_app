@@ -4,6 +4,9 @@ import { useState } from "react"
 import Link from "next/link"
 import { BookOpen, ChevronUp, GraduationCap, Mic, Pencil } from "lucide-react"
 
+import { DeckFontSizeSelector } from "@/components/decks/deck-font-size-selector"
+import { useDeckFontSize } from "@/hooks/use-deck-font-size"
+import { DECK_TYPOGRAPHY } from "@/lib/deck-typography"
 import { cn } from "@/lib/utils"
 import type { FsrsRating } from "@/lib/fsrs/types"
 import type { StudyCardItem } from "@/lib/services/study-service"
@@ -59,6 +62,8 @@ export function StudyCard({
   onExam,
   onVoiceExam,
 }: Props) {
+  const { fontSize } = useDeckFontSize()
+  const contentClass = cn(DECK_TYPOGRAPHY[fontSize].body, "leading-relaxed break-words [&_code]:text-[0.9em] [&_table]:text-[1em] [&_h1]:text-[1.4em] [&_h2]:text-[1.2em] [&_h3]:text-[1.1em]")
   const [lightbox, setLightbox] = useState<string | null>(null)
   const images = [card.image_url_1, card.image_url_2].filter(Boolean) as string[]
 
@@ -76,6 +81,7 @@ export function StudyCard({
       </div>
 
       <div className="flex w-full max-w-[640px] flex-col gap-6 sm:gap-8">
+        <div className="flex justify-end"><DeckFontSizeSelector /></div>
         <Surface ghost className="p-6 sm:p-10">
           <div className="flex justify-center">
             <Pill tone={stateTone(card)} size="sm">
@@ -88,7 +94,7 @@ export function StudyCard({
               <MarkdownContent
                 content={card.front}
                 size="md"
-                className="text-center text-body-lg sm:text-headline-sm leading-relaxed"
+                className={cn("text-center", contentClass)}
               />
             </div>
           </div>
@@ -110,7 +116,7 @@ export function StudyCard({
                 {/* Tonal shift, not a 1px rule — DESIGN.md §2 */}
                 <div className="rounded-xl bg-surface-container-low/70 p-5 sm:p-6 max-w-[60ch] mx-auto w-full">
                   <p className="mb-2 text-label-sm text-on-surface-variant uppercase font-semibold">Answer</p>
-                  <MarkdownContent content={card.back} size="md" className="text-body-md leading-relaxed" />
+                  <MarkdownContent content={card.back} size="md" className={contentClass} />
                 </div>
 
                 {images.length > 0 && (

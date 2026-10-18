@@ -134,6 +134,13 @@
       "when": 1791855974827,
       "tag": "0018_old_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791858520024,
+      "tag": "0019_reader_editorial_comfort",
+      "breakpoints": true
     }
   ]
 }

@@ -49,7 +49,7 @@ export function TopNav({ decks = [] }: TopNavProps): React.JSX.Element {
             variant="ghost"
             size="icon"
             aria-label="Open navigation"
-            className="lg:hidden"
+            className="size-11 lg:hidden"
             onClick={() => setDrawerOpen(true)}
           >
             <Menu className="h-5 w-5" />
@@ -61,7 +61,7 @@ export function TopNav({ decks = [] }: TopNavProps): React.JSX.Element {
           type="button"
           variant="ghost"
           onClick={() => setPaletteOpen(true)}
-          className="h-9 px-2.5 sm:px-3 sm:w-48 md:w-64 flex items-center justify-center sm:justify-between rounded-lg bg-surface-container-low text-body-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface cursor-pointer"
+          className="h-11 min-w-11 px-2.5 sm:px-3 sm:w-48 md:w-64 flex items-center justify-center sm:justify-between rounded-lg bg-surface-container-low text-body-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface cursor-pointer"
           aria-label="Open quick search"
         >
           <span className="flex items-center gap-2">
@@ -82,7 +82,7 @@ export function TopNav({ decks = [] }: TopNavProps): React.JSX.Element {
                 <button
                   type="button"
                   aria-label="Account menu"
-                  className="flex cursor-pointer items-center gap-3 rounded-full transition-opacity hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center gap-3 rounded-full transition-opacity hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                 />
               }
             >

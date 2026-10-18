@@ -1,5 +1,7 @@
 'use client';
 
+import { createPreferenceSaver, type PreferenceSaveStatus } from '@/components/reader/preference-saver';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -133,6 +135,12 @@ export function Reader({
   const { resolvedTheme } = useTheme();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [preferences, setPreferences] = useState(initialPreferences);
+  const [preferenceSaveStatus, setPreferenceSaveStatus] = useState<PreferenceSaveStatus>('saved');
+  const [preferenceSaver] = useState(() => createPreferenceSaver(
+    async (next): Promise<boolean> => !(await updateReaderPreferencesAction(next)).error,
+    setPreferenceSaveStatus,
+    PREFS_DEBOUNCE_MS
+  ));
   const [annotations, setAnnotations] = useState(initialAnnotations);
   const [bookmarks, setBookmarks] = useState(initialBookmarks);
   const [bookmarkPending, setBookmarkPending] = useState(false);
@@ -199,7 +207,6 @@ export function Reader({
 
   // ── Persistence (debounced) ─────────────────────────────────────────────
   const progressTimer = useRef<number | undefined>(undefined);
-  const prefsTimer = useRef<number | undefined>(undefined);
 
   const handleRelocated = useCallback(
     (next: ReaderLocation) => {
@@ -217,21 +224,23 @@ export function Reader({
     [book.id]
   );
 
-  const handlePreferences = useCallback((next: ReaderPreferences) => {
+  const handlePreferences = useCallback((next: ReaderPreferences): void => {
     setPreferences(next);
-    window.clearTimeout(prefsTimer.current);
-    prefsTimer.current = window.setTimeout(() => {
-      void updateReaderPreferencesAction(next);
-    }, PREFS_DEBOUNCE_MS);
-  }, []);
+    preferenceSaver.schedule(next);
+  }, [preferenceSaver]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const flush = (): void => { void preferenceSaver.flush(); };
+    const onVisibility = (): void => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
       window.clearTimeout(progressTimer.current);
-      window.clearTimeout(prefsTimer.current);
-    },
-    []
-  );
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
+    };
+  }, [preferenceSaver]);
 
   // A settled single-word selection opens the lookup card right away (like Kindle): the AI translation
   // starts at once (only a translation-cache miss counts against the daily cap), with the dictionary below.
@@ -296,6 +305,10 @@ export function Reader({
     onHighlightClick: handleHighlightClick,
     onToggleChrome: toggleChrome,
     onToggleFullscreen: toggleFullscreen,
+    onEscape: () => {
+      if (panel || lookup || noteTarget || cardDraft || selection || activeHighlight) return;
+      setChromeVisible(true);
+    },
     onLocationsGenerated: handleLocationsGenerated,
   });
 
@@ -453,6 +466,8 @@ export function Reader({
       {/* Top bar — its own row above the page, so it never covers the text. Hiding the chrome only fades
           it: the row keeps its height, so toggling never re-paginates. */}
       <header
+        inert={!chromeVisible}
+        data-testid="reader-header"
         className={cn(
           // gap-1/px-2 on phones: seven 44 px pills fit in 360 px.
           'relative z-10 grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 transition-opacity duration-200 sm:h-16 sm:gap-3 sm:px-5',
@@ -702,9 +717,21 @@ export function Reader({
       />
       <ReaderSettingsSheet
         open={panel === 'settings'}
-        onOpenChange={(open) => setPanel(open ? 'settings' : null)}
+        onOpenChange={(open) => {
+          setPanel(open ? 'settings' : null);
+          if (!open) void preferenceSaver.flush();
+        }}
         preferences={preferences}
         onChange={handlePreferences}
+        previewCss={css}
+        saveStatus={preferenceSaveStatus}
+        onRetry={() => { void preferenceSaver.retry(); }}
+        onStartReading={() => {
+          void preferenceSaver.flush();
+          setPanel(null);
+          setChromeVisible(false);
+          window.setTimeout(() => container?.querySelector('iframe')?.focus(), 250);
+        }}
       />
     </div>
   );

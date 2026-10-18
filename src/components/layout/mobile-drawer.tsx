@@ -41,7 +41,7 @@ export function MobileDrawer({
         onClick={() => onOpenChange(false)}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-colors",
+          "flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
           active
             ? "bg-primary/10 font-semibold text-primary"
             : "font-medium text-on-surface-variant hover:bg-surface-container hover:text-primary"
@@ -70,7 +70,7 @@ export function MobileDrawer({
               onOpenChange(false)
               window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
             }}
-            className="w-full justify-start gap-2 text-on-surface-variant text-body-sm h-10"
+            className="w-full justify-start gap-2 text-on-surface-variant text-body-sm h-11"
           >
             <Search className="size-4 text-outline" />
             <span>Search decks… (⌘K)</span>
@@ -85,7 +85,7 @@ export function MobileDrawer({
           <Button
             variant="ghost"
             size="lg"
-            className="w-full justify-start px-4 text-on-surface-variant"
+            className="min-h-11 w-full justify-start px-4 text-on-surface-variant"
             onClick={() => signOut({ callbackUrl: "/login" })}
           >
             <LogOut className="h-5 w-5" />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, useEffect, useRef } from "react"
+import { useState, useCallback, useMemo, useEffect, useRef, useId } from "react"
 import { useRouter } from "next/navigation"
 import { Layers, Play, type LucideIcon } from "lucide-react"
 
@@ -42,6 +42,7 @@ interface PaletteAction {
 
 interface PaletteGroupProps {
   title: string
+  idPrefix: string
   actions: PaletteAction[]
   activeIndex: number
   startIndex: number
@@ -51,6 +52,7 @@ interface PaletteGroupProps {
 
 function PaletteGroup({
   title,
+  idPrefix,
   actions,
   activeIndex,
   startIndex,
@@ -60,7 +62,7 @@ function PaletteGroup({
   if (actions.length === 0) return null
 
   return (
-    <div>
+    <div role="group" aria-label={title}>
       <div className="px-3 py-1 text-label-sm uppercase text-on-surface-variant">
         {title}
       </div>
@@ -71,6 +73,7 @@ function PaletteGroup({
           return (
             <div
               key={action.id}
+              id={`${idPrefix}-${action.id}`}
               ref={(el) => registerRef(action.id, el)}
               role="option"
               aria-selected={isSelected}
@@ -118,6 +121,8 @@ export function CommandPalette({
   decks,
 }: CommandPaletteProps): React.JSX.Element {
   const router = useRouter()
+  const paletteId = useId()
+  const listboxId = `${paletteId}-results`
   const [activeIndex, setActiveIndex] = useState<number>(0)
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
@@ -230,7 +235,7 @@ export function CommandPalette({
   }, [activeIndex, flattenedActions])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (flattenedActions.length === 0) return
+    if (e.nativeEvent.isComposing || flattenedActions.length === 0) return
 
     if (e.key === "ArrowDown") {
       e.preventDefault()
@@ -256,7 +261,7 @@ export function CommandPalette({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogPortal>
         <DialogBackdrop />
-        <DialogPopup className="p-0 sm:max-w-xl max-h-[85vh] flex flex-col overflow-hidden bg-surface-container-lowest">
+        <DialogPopup className="shadow-ambient-lg p-0 sm:max-w-xl max-h-[85vh] flex flex-col overflow-hidden bg-surface-container-lowest">
           <DialogTitle className="sr-only">Quick search</DialogTitle>
           <DialogDescription className="sr-only">
             Search decks, study sessions, and navigation
@@ -264,6 +269,12 @@ export function CommandPalette({
 
           <div className="p-3 bg-surface-container-low/50">
             <SearchField
+              role="combobox"
+              aria-label="Search decks, study sessions, and pages"
+              aria-autocomplete="list"
+              aria-expanded={open}
+              aria-controls={listboxId}
+              aria-activedescendant={flattenedActions[activeIndex] ? `${paletteId}-${flattenedActions[activeIndex].id}` : undefined}
               value={query}
               onChange={handleQueryChange}
               placeholder="Search decks, study, or navigate… (⌘K)"
@@ -273,11 +284,13 @@ export function CommandPalette({
           </div>
 
           <div
+            id={listboxId}
             role="listbox"
+            aria-label="Search results"
             className="max-h-96 overflow-y-auto p-2 space-y-4"
           >
             {flattenedActions.length === 0 ? (
-              <div className="py-10 px-4 text-center">
+              <div role="status" className="py-10 px-4 text-center">
                 <p className="text-body-md text-on-surface">
                   No results match “{query.trim()}”
                 </p>
@@ -288,6 +301,7 @@ export function CommandPalette({
             ) : (
               <>
                 <PaletteGroup
+                  idPrefix={paletteId}
                   title="Decks"
                   actions={deckActions}
                   activeIndex={activeIndex}
@@ -296,6 +310,7 @@ export function CommandPalette({
                   registerRef={registerRef}
                 />
                 <PaletteGroup
+                  idPrefix={paletteId}
                   title="Study"
                   actions={studyActions}
                   activeIndex={activeIndex}
@@ -304,6 +319,7 @@ export function CommandPalette({
                   registerRef={registerRef}
                 />
                 <PaletteGroup
+                  idPrefix={paletteId}
                   title="Go to"
                   actions={navActions}
                   activeIndex={activeIndex}

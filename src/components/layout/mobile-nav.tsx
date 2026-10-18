@@ -7,6 +7,7 @@ import { Bell, BookOpen, Layers, LayoutDashboard, Plus, Settings } from "lucide-
 
 import { cn } from "@/lib/utils"
 import { CreateDeckDialog } from "@/components/decks/CreateDeckDialog"
+import { Button } from "@/components/ui/button"
 import { isNavActive } from "@/components/layout/nav-config"
 
 const TABS = [
@@ -17,7 +18,7 @@ const TABS = [
   { icon: Settings, label: "Settings", href: "/settings" },
 ] as const
 
-export function MobileNav({ hasDueCards = false }: { hasDueCards?: boolean }) {
+export function MobileNav({ hasDueCards = false }: { hasDueCards?: boolean }): React.JSX.Element {
   const pathname = usePathname()
   const [createOpen, setCreateOpen] = useState(false)
 
@@ -41,7 +42,7 @@ export function MobileNav({ hasDueCards = false }: { hasDueCards?: boolean }) {
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "relative flex flex-col items-center gap-1 transition-colors",
+          "relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
           active
             ? "font-semibold text-primary"
             : "font-medium text-on-surface-variant hover:text-primary"
@@ -56,24 +57,25 @@ export function MobileNav({ hasDueCards = false }: { hasDueCards?: boolean }) {
             />
           )}
         </div>
-        <span className="text-label-sm normal-case">{label}</span>
+        <span className="w-full text-center text-label-sm tracking-tight normal-case">{label}</span>
       </Link>
     )
   }
 
   return (
     <>
-      <nav className="fixed right-0 bottom-0 left-0 z-50 flex items-center justify-around bg-surface-container-low px-4 py-3 shadow-ambient-lg lg:hidden">
+      <nav aria-label="Main navigation" className="fixed right-0 bottom-0 left-0 z-50 grid grid-cols-6 items-center bg-surface-container-low px-2 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-ambient-lg lg:hidden">
         {left.map(renderTab)}
 
-        <div className="relative -top-6">
-          <button
+        <div className="relative -top-6 flex justify-center">
+          <Button
+            type="button"
             onClick={() => setCreateOpen(true)}
             aria-label="Create new deck"
             className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-primary text-on-primary shadow-ambient-lg transition-transform hover:opacity-90 active:scale-95"
           >
             <Plus className="h-7 w-7" />
-          </button>
+          </Button>
         </div>
 
         {right.map(renderTab)}

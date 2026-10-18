@@ -11,6 +11,8 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import { useDeckFontSize } from '@/hooks/use-deck-font-size';
+import { DECK_TYPOGRAPHY } from '@/lib/deck-typography';
 import { cn } from '@/lib/utils';
 import { formatSubject, subjectAccent } from '@/lib/subject-accent';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -57,6 +59,8 @@ export function DeckCard({
   onEdit,
   onDelete,
 }: DeckCardProps): React.JSX.Element {
+  const { fontSize } = useDeckFontSize();
+  const typography = DECK_TYPOGRAPHY[fontSize];
   const mastery = total_cards > 0 ? Math.round((mastered_count / total_cards) * 100) : 0;
   const fullyMastered = mastery === 100 && total_cards > 0;
   const state = due_count > 0 ? 'study' : fullyMastered ? 'mastered' : 'review';
@@ -112,16 +116,16 @@ export function DeckCard({
         </div>
 
         <Link href={`/decks/${id}`}>
-          <h3 className="mb-1 text-headline-sm text-on-surface transition-colors group-hover:text-primary">
+          <h3 className={cn('mb-2 break-words text-on-surface transition-colors group-hover:text-primary', typography.title)}>
             {name}
           </h3>
         </Link>
 
         {description && (
-          <p className="mb-3 line-clamp-2 text-body-sm text-on-surface-variant">{description}</p>
+          <p className={cn('mb-3 break-words leading-relaxed text-on-surface-variant', typography.body)}>{description}</p>
         )}
 
-        <p className="mb-6 text-body-md text-on-surface-variant">
+        <p className={cn('mb-6 text-on-surface-variant', typography.metadata)}>
           {total_cards} cards ·{' '}
           {fullyMastered ? (
             <span className="font-semibold text-state-mastered">Fully mastered</span>
@@ -134,7 +138,7 @@ export function DeckCard({
 
         <div className="mb-8 space-y-4">
           <div>
-            <div className="mb-1.5 flex justify-between text-label-sm text-on-surface-variant uppercase font-semibold">
+            <div className={cn('mb-1.5 flex justify-between gap-2 text-on-surface-variant font-semibold', typography.metadata)}>
               <span>Mastery progress</span>
               <span className="tabular">{mastery}%</span>
             </div>
@@ -146,7 +150,7 @@ export function DeckCard({
             {breakdown.map(({ label, value, dot }) => (
               <li key={label} className="flex items-center gap-1.5">
                 <span aria-hidden className={cn('size-2 rounded-full', dot)} />
-                <span className="text-label-sm text-on-surface-variant uppercase font-semibold">
+                <span className={cn('text-on-surface-variant font-semibold', typography.metadata)}>
                   {label} <span className="tabular">{value}</span>
                 </span>
               </li>
@@ -156,7 +160,7 @@ export function DeckCard({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-        <span className="text-body-sm text-on-surface-variant italic">
+        <span className={cn('text-on-surface-variant italic', typography.metadata)}>
           Last studied {last_studied_label}
         </span>
 

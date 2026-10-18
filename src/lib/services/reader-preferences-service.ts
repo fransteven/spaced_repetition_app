@@ -1,3 +1,4 @@
+import { DEFAULT_READER_PREFERENCES, READER_SCALE_MIN, READER_SCALE_MAX } from '@/lib/reader-options';
 import { eq } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -6,20 +7,14 @@ import type { ReaderPreferencesInput } from '@/lib/validations';
 
 export type ReaderPreferences = Omit<InferSelectModel<typeof readerPreferences>, 'user_id' | 'updated_at'>;
 
-export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
-  font_scale: 1,
-  font_family: 'book',
-  line_height: 1.45,
-  justify: false,
-  two_pages: false,
-  theme: 'sepia',
-};
+export { DEFAULT_READER_PREFERENCES } from '@/lib/reader-options';
 
 export async function getReaderPreferences(userId: string): Promise<ReaderPreferences> {
   const [row] = await db.select().from(readerPreferences).where(eq(readerPreferences.user_id, userId));
   if (!row) return DEFAULT_READER_PREFERENCES;
   return {
-    font_scale: row.font_scale,
+    // PostgreSQL real stores 0.7/1.6 a few ULPs outside the validated range.
+    font_scale: Math.min(READER_SCALE_MAX, Math.max(READER_SCALE_MIN, row.font_scale)),
     font_family: row.font_family,
     line_height: row.line_height,
     justify: row.justify,

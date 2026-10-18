@@ -22,6 +22,7 @@ test('code inside a book never runs', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Contents' }).click();
   await page.getByRole('dialog').getByText('Chapter 2').click();
+  await expect(page.getByRole('dialog')).toBeHidden();
   const frame = page.frameLocator('.epub-container iframe');
   await expect(frame.locator('#hostile')).toBeAttached();
 

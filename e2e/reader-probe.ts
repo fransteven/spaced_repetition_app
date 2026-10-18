@@ -154,6 +154,8 @@ export async function openReader(page: Page): Promise<void> {
     });
   });
   await page.goto(`/read/${BOOK_ID}`);
+  // Next's streamed HTML can briefly contain a hidden pending segment alongside the hydrated page.
+  await expect(page.getByTestId('page-label')).toHaveCount(1);
   await expect(page.getByTestId('page-label')).toHaveText(/\d/, { timeout: 60_000 });
   await page.evaluate(installProbe);
   await expect.poll(() => page.evaluate(() => window.e2eProbe?.visibleWords().length ?? 0)).toBeGreaterThan(20);

@@ -84,6 +84,8 @@ interface Callbacks {
   onToggleChrome: () => void;
   /** "f" key, inside or outside the page iframe. */
   onToggleFullscreen: () => void;
+  /** Restore reading controls; the parent gives open panels precedence. */
+  onEscape: () => void;
   onLocationsGenerated: (json: string) => void;
 }
 
@@ -730,6 +732,7 @@ export function useEpubReader(options: Options): EpubReader {
         if (event.key === 'ArrowLeft') turn(rendition, -1);
         if (event.key === 'ArrowRight') turn(rendition, 1);
         if (isFullscreenKey(event)) latest.current.onToggleFullscreen();
+        if (event.key === 'Escape') latest.current.onEscape();
       });
 
       rendition.on('touchstart', (event: TouchEvent) => {
@@ -887,6 +890,7 @@ export function useEpubReader(options: Options): EpubReader {
         void renditionRef.current?.next();
       }
       if (isFullscreenKey(event)) latest.current.onToggleFullscreen();
+      if (event.key === 'Escape' && !event.defaultPrevented) latest.current.onEscape();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

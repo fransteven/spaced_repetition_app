@@ -1,3 +1,4 @@
+import { READER_THEME_VALUES, READER_FONT_VALUES, READER_SCALE_MIN, READER_SCALE_MAX } from '@/lib/reader-options';
 import { z } from 'zod';
 import { EMBEDDING_DIMENSIONS } from '@/lib/rag/constants';
 import { AUTO_DETECT, LANGUAGE_CODES } from '@/lib/translation/languages';
@@ -155,12 +156,12 @@ export const AnnotationNoteFormSchema = z.object({
 export type AnnotationNoteFormValues = z.infer<typeof AnnotationNoteFormSchema>;
 
 export const ReaderPreferencesSchema = z.object({
-  font_scale:  z.number().min(0.7).max(1.6).optional(),
-  font_family: z.enum(['book', 'sans', 'original']).optional(),
+  font_scale:  z.number().min(READER_SCALE_MIN).max(READER_SCALE_MAX).optional(),
+  font_family: z.enum(READER_FONT_VALUES).optional(),
   line_height: z.number().min(1.3).max(2).optional(),
   justify:     z.boolean().optional(),
   two_pages:   z.boolean().optional(),
-  theme:       z.enum(['auto', 'light', 'dark', 'sepia']).optional(),
+  theme:       z.enum(READER_THEME_VALUES).optional(),
 });
 
 export type ReaderPreferencesInput = z.infer<typeof ReaderPreferencesSchema>;

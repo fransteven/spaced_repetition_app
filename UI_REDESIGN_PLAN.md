@@ -1,5 +1,22 @@
 # Rediseño estético NeuroCards — "Calm & Reward"
 
+## Estado de reanudación — 18 de octubre de 2026
+
+El rediseño principal se implementó en `5b5a1ac` (fases 0–7 y parte del barrido final). La descripción de problemas original de abajo es el diagnóstico previo, no una lista actual de fallos.
+
+Trabajo de esta reanudación:
+
+- [x] Mejorar foco visible y áreas táctiles de navegación y búsqueda; distribuir la bottom-nav en seis columnas y respetar el área segura del dispositivo.
+- [x] Conectar el combobox de búsqueda con sus resultados y el resultado activo mediante ARIA; respetar composición de texto con IME.
+- [x] Ajustar el título de Settings al contrato tipográfico responsive.
+- [x] Petición adicional del usuario: aumentar el cuerpo de mazos/tarjetas de 14 a 18 px por defecto y añadir selector de 18 / 20 / 24 px en listado, detalle y estudio. Preferencia compartida y persistida en este navegador, sin migración. Descripciones y caras de tarjetas dejan de recortarse a 2–3 líneas.
+- [ ] Completar la matriz visual de todas las rutas, temas y anchos de la fase 9.
+- [ ] Resolver el estado de `ds-bundle/` con el flujo DesignSync; no se ha regenerado ni eliminado.
+
+Validación de este bloque: TypeScript y build de producción correctos; lint sin errores (19 advertencias preexistentes de DesignSync); Playwright 2/2 pruebas correctas (login y flujo de tipografía). Se revisó la captura móvil a 360 px. La matriz completa de temas y rutas sigue pendiente.
+
+La prueba `e2e/deck-typography.spec.ts` verifica tamaño calculado, persistencia al recargar, propagación entre pantallas, responsive y resultado activo de búsqueda sobre la base de pruebas aislada.
+
 ## Context
 
 NeuroCards es una app de repetición espaciada (FSRS 4.5) en Next.js 16 + Tailwind v4 + shadcn/@base-ui. El sistema de tokens en `src/app/globals.css` ya es sólido (Material-You completo, dark mode cableado con `next-themes`), pero **solo la mitad de las pantallas lo usa**. Las pantallas nuevas (decks, deck detail, study) usan `Surface`/`Pill`/tokens correctamente; las viejas (dashboard home, login, register, reminders, settings) reinventan cards, sombras y escalas tipográficas a mano.
@@ -375,4 +392,4 @@ Checklist manual por ruta (`/`, `/decks`, `/decks/[id]`, `/study/[id]`, `/remind
 - [ ] `grep -rnE "text-(2|3|4|5)xl" src/` → sin resultados
 - [ ] `grep -rn "dark:" src/app src/components --include=*.tsx | grep -v "components/ui/"` → sin resultados
 
-No hay test runner configurado en el repo, así que la verificación es build + recorrido manual.
+El repo dispone ahora de Vitest (`npm test`) y Playwright (`npm run test:e2e`). Los E2E usan la rama aislada configurada en `.env.test`; complementar con build y revisión visual.

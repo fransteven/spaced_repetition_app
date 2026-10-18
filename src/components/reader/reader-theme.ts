@@ -1,3 +1,5 @@
+import { READER_FONT_STACKS, readerFontFaces } from '@/lib/reader-fonts';
+import { isDarkReaderTheme } from '@/lib/reader-options';
 import type { ReaderPreferences } from '@/lib/services/reader-preferences-service';
 
 /**
@@ -11,13 +13,6 @@ import type { ReaderPreferences } from '@/lib/services/reader-preferences-servic
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
 
 export const HIGHLIGHT_COLORS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink'];
-
-// Iowan Old Style is Apple's Books face (system font on macOS/iOS, not
-// redistributable); Literata is the self-hosted OFL fallback everywhere else.
-const FONT_STACKS: Record<Exclude<ReaderPreferences['font_family'], 'original'>, string> = {
-  book: '"Iowan Old Style", "Charter", "Literata", Georgia, serif',
-  sans: 'Inter, -apple-system, system-ui, "Segoe UI", sans-serif',
-};
 
 // Code keeps a fixed-width face whatever the reading font is.
 const MONO_STACK = 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
@@ -49,17 +44,8 @@ export function readReaderTokens(): ReaderTokens {
       pink: token('--highlight-pink'),
     },
     highlightOpacity: token('--highlight-opacity') || '0.5',
-    dark: root.dataset.readerTheme
-      ? root.dataset.readerTheme === 'dark'
-      : root.classList.contains('dark'),
+    dark: isDarkReaderTheme(root.dataset.readerTheme, root.classList.contains('dark')),
   };
-}
-
-function literataFaces(origin: string): string {
-  const face = (weight: number, style: 'normal' | 'italic'): string =>
-    `@font-face{font-family:"Literata";font-style:${style};font-weight:${weight};font-display:swap;` +
-    `src:url("${origin}/fonts/literata/literata-latin-${weight}-${style}.woff2") format("woff2");}`;
-  return [face(400, 'normal'), face(400, 'italic'), face(600, 'normal'), face(600, 'italic')].join('');
 }
 
 export function buildReaderCss(tokens: ReaderTokens, prefs: ReaderPreferences, origin: string): string {
@@ -67,14 +53,14 @@ export function buildReaderCss(tokens: ReaderTokens, prefs: ReaderPreferences, o
     prefs.font_family === 'original'
       ? ''
       : `body, body p, body div, body span, body li, body blockquote, body h1, body h2, body h3, body h4, body h5, body h6 {
-           font-family: ${FONT_STACKS[prefs.font_family]} !important;
+           font-family: ${READER_FONT_STACKS[prefs.font_family]} !important;
          }
          body pre, body pre *, body code, body code *, body kbd, body samp, body tt {
            font-family: ${MONO_STACK} !important;
          }`;
 
   return `
-${literataFaces(origin)}
+${readerFontFaces(prefs.font_family, origin)}
 html {
   font-size: ${Math.round(112.5 * prefs.font_scale)}% !important;
   /* epub.js pads the page 20 px top and bottom (inline, not !important): give that room to the text. */

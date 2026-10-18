@@ -4,6 +4,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 
+import { DeckFontSizeSelector } from '@/components/decks/deck-font-size-selector';
+import { useDeckFontSize } from '@/hooks/use-deck-font-size';
+import { DECK_TYPOGRAPHY } from '@/lib/deck-typography';
 import { cn } from '@/lib/utils';
 import { CardEditor } from '@/components/cards/CardEditor';
 import { DeleteCardDialog } from '@/components/cards/DeleteCardDialog';
@@ -69,6 +72,8 @@ function stateTone(card: CardRow): React.ComponentProps<typeof Pill>['tone'] {
 }
 
 export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Element {
+  const { fontSize } = useDeckFontSize();
+  const typography = DECK_TYPOGRAPHY[fontSize];
   const [activeState, setActiveState] = useState<string>('All');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editCard, setEditCard] = useState<CardData | null>(null);
@@ -180,6 +185,8 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
             ))}
           </div>
 
+          <DeckFontSizeSelector />
+
           <SearchField
             value={query}
             onChange={setQuery}
@@ -244,14 +251,14 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
                 </div>
 
                 <div>
-                  <p className="mb-1 text-label-sm text-on-surface-variant uppercase">Front</p>
-                  <p className="line-clamp-3 text-body-md text-on-surface">{card.front}</p>
+                  <p className={cn('mb-2 text-on-surface-variant font-medium', typography.metadata)}>Front</p>
+                  <p className={cn('whitespace-pre-wrap break-words leading-relaxed text-on-surface', typography.body)}>{card.front}</p>
                 </div>
 
                 {/* Tonal shift instead of a 1px divider — DESIGN.md §2 */}
                 <div className="-mx-1 rounded-sm bg-surface-container-low/60 px-3 py-2">
-                  <p className="mb-1 text-label-sm text-on-surface-variant uppercase">Back</p>
-                  <p className="line-clamp-3 text-body-md text-on-surface-variant">{card.back}</p>
+                  <p className={cn('mb-2 text-on-surface-variant font-medium', typography.metadata)}>Back</p>
+                  <p className={cn('whitespace-pre-wrap break-words leading-relaxed text-on-surface-variant', typography.body)}>{card.back}</p>
                 </div>
 
                 {(card.image_url_1 || card.image_url_2) && (
@@ -280,7 +287,7 @@ export function CardList({ deckId, initialCards }: CardListProps): React.JSX.Ele
                 )}
 
                 {schedule && (
-                  <p className={cn('mt-auto text-label-sm text-on-surface-variant uppercase')}>
+                  <p className={cn('mt-auto text-on-surface-variant', typography.metadata)}>
                     {schedule}
                   </p>
                 )}

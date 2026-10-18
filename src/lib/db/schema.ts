@@ -1,3 +1,4 @@
+import { READER_THEME_VALUES, READER_FONT_VALUES } from '@/lib/reader-options';
 import { sql, type SQL } from 'drizzle-orm';
 import { pgTable, uuid, text, integer, real, timestamp, boolean, pgEnum, primaryKey, index, uniqueIndex, vector, customType } from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from '@auth/core/adapters';
@@ -161,8 +162,8 @@ export const reminderDeliveries = pgTable('reminder_deliveries', {
 export const bookStatusEnum     = pgEnum('book_status',     ['processing', 'ready', 'failed']);
 export const bookIndexStatusEnum = pgEnum('book_index_status', ['pending', 'indexing', 'ready', 'failed']);
 export const highlightColorEnum = pgEnum('highlight_color', ['yellow', 'green', 'blue', 'pink']);
-export const readerThemeEnum    = pgEnum('reader_theme',    ['auto', 'light', 'dark', 'sepia']);
-export const readerFontEnum     = pgEnum('reader_font',     ['book', 'sans', 'original']);
+export const readerThemeEnum    = pgEnum('reader_theme',    READER_THEME_VALUES);
+export const readerFontEnum     = pgEnum('reader_font',     READER_FONT_VALUES);
 
 // One uploaded EPUB. The original file lives in Vercel Blob (private);
 // its plain-text version lives in book_sections.
