@@ -1,8 +1,10 @@
 import {
   ApiErrorReplySchema,
   AskIndexingReplySchema,
+  type AskOrigin,
   type AskSource,
   type AskStage,
+  type AskWebSource,
 } from '@/lib/rag/ask-types';
 import { parseAskEvent, readSse } from '@/lib/sse';
 import type { AskTask } from '@/lib/validations';
@@ -29,7 +31,14 @@ export interface AskHandlers {
 }
 
 export type AskOutcome =
-  | { kind: 'final'; answer: string; answerable: boolean; sources: AskSource[] }
+  | {
+      kind: 'final';
+      answer: string;
+      answerable: boolean;
+      sources: AskSource[];
+      origin: AskOrigin;
+      web_sources: AskWebSource[];
+    }
   | { kind: 'indexing' }
   | { kind: 'error'; message: string };
 

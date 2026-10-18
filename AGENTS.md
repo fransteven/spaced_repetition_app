@@ -365,6 +365,12 @@ book data through internal routes of this app. Both directions use the shared
 | Python → Next | `POST /api/internal/rag/passages` | Chunks of a range of sections in reading order, evenly sampled (chapter summary, key terms, "so far"); same ownership + spoiler rules |
 | Python → Next | `GET …/books/[id]/sections` · `PUT …/chunks` · `POST …/index/begin\|complete\|fail` | Indexing: page sections, upload embedded chunks, claim (compare-and-set) and release the index |
 
+When the book does not answer a question (the grader gives up, or the book answer cites nothing), a general
+assistant answers instead: final event `origin: 'general'`, `answerable: false`, plus `web_sources` (the model may
+call OpenAI's `web_search`, restricted to the trusted domains in `srs-llm-api/app/llm/trusted_sources.py`). The ask
+panel labels it "Not in the book · general answer" and lists the web sources. Toggle: `RAG_GENERAL_FALLBACK` /
+`RAG_WEB_SEARCH` in the service.
+
 Whole-section requests ("Summarize this chapter", "key terms of this chapter", "main idea so far") are
 not vector searches: the ask body carries `task` (`question` · `chapter_summary` · `key_terms` · `so_far`,
 sent explicitly by the UI suggestions and detected in typed EN/ES questions by `app/rag/intent.py`) and

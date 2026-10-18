@@ -3,17 +3,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, BookOpenText, X } from 'lucide-react';
+import { ArrowUp, BookOpenText, Globe, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { requestAnswer } from '@/lib/rag/ask-client';
-import type { AskSource, AskStage } from '@/lib/rag/ask-types';
+import type { AskOrigin, AskSource, AskStage, AskWebSource } from '@/lib/rag/ask-types';
 import { AskBookFormSchema, type AskBookFormValues, type AskTask } from '@/lib/validations';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MarkdownContent } from '@/components/ui/markdown-content';
 import { FilterChip } from '@/components/primitives/filter-chip';
+import { Pill } from '@/components/primitives/pill';
 import { AI_STARTING_HINT } from '@/hooks/use-slow-start';
 
 const INDEX_POLL_MS = 5000;
@@ -32,7 +33,16 @@ const STAGE_LABELS: Record<AskStage, string> = {
   searching: 'Searching the book…',
   reading: 'Reading the passages…',
   writing: 'Writing the answer…',
+  general: 'Not in the book — answering from general knowledge…',
 };
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
 
 interface ChatMessage {
   id: number;
@@ -40,6 +50,8 @@ interface ChatMessage {
   content: string;
   answerable?: boolean;
   sources?: AskSource[];
+  origin?: AskOrigin; // 'general': the book did not cover it and a general assistant answered
+  webSources?: AskWebSource[];
   streaming?: boolean;
 }
 
@@ -132,6 +144,8 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
       onStage: (next: AskStage): void => {
         setStartingService(false);
         setStage(next);
+        // The book could not answer: drop its streamed preview before the general answer streams in.
+        if (next === 'general') patch({ content: '', origin: 'general' });
       },
       onToken: (text: string): void =>
         setMessages((current) =>
@@ -152,7 +166,14 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
         );
 
         if (outcome.kind === 'final') {
-          patch({ content: outcome.answer, answerable: outcome.answerable, sources: outcome.sources, streaming: false });
+          patch({
+            content: outcome.answer,
+            answerable: outcome.answerable,
+            sources: outcome.sources,
+            origin: outcome.origin,
+            webSources: outcome.web_sources,
+            streaming: false,
+          });
           setPhase('idle');
           return;
         }
@@ -251,14 +272,22 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
                   <Skeleton className="h-4 w-2/3" />
                 </div>
               ) : (
-                <MarkdownContent
-                  content={message.content}
-                  size="sm"
-                  className={cn(
-                    'text-body-md leading-relaxed',
-                    !message.streaming && !message.answerable && 'text-on-surface-variant'
+                <>
+                  {message.origin === 'general' && (
+                    <Pill tone="neutral" size="sm">
+                      <Globe className="size-3" aria-hidden />
+                      Not in the book · general answer
+                    </Pill>
                   )}
-                />
+                  <MarkdownContent
+                    content={message.content}
+                    size="sm"
+                    className={cn(
+                      'text-body-md leading-relaxed',
+                      !message.streaming && !message.answerable && message.origin !== 'general' && 'text-on-surface-variant'
+                    )}
+                  />
+                </>
               )}
               {message.sources && message.sources.length > 0 && (
                 <ul className="space-y-1.5">
@@ -279,6 +308,26 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
                           </span>
                         </span>
                       </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {message.webSources && message.webSources.length > 0 && (
+                <ul className="space-y-1.5" aria-label="Web sources">
+                  {message.webSources.map((source) => (
+                    <li key={source.url}>
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex w-full items-start gap-2 rounded-xl bg-surface-container-low px-3 py-2 transition-colors hover:bg-surface-container"
+                      >
+                        <Globe className="mt-0.5 size-3.5 shrink-0 text-on-surface-variant" aria-hidden />
+                        <span className="min-w-0">
+                          <span className="block truncate text-body-sm text-on-surface">{source.title}</span>
+                          <span className="block truncate text-label-sm text-on-surface-variant">{hostOf(source.url)}</span>
+                        </span>
+                      </a>
                     </li>
                   ))}
                 </ul>

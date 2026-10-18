@@ -15,7 +15,15 @@ export const AskSourceSchema = z.object({
 });
 export type AskSource = z.infer<typeof AskSourceSchema>;
 
-export const AskStageSchema = z.enum(['searching', 'reading', 'writing']);
+/** A trusted web page a general answer relied on (the service only allows vetted domains). */
+export const AskWebSourceSchema = z.object({ title: z.string(), url: z.string().url() });
+export type AskWebSource = z.infer<typeof AskWebSourceSchema>;
+
+export const AskOriginSchema = z.enum(['book', 'general']);
+export type AskOrigin = z.infer<typeof AskOriginSchema>;
+
+// 'general': the book did not answer and a general assistant is answering instead (drop the preview).
+export const AskStageSchema = z.enum(['searching', 'reading', 'writing', 'general']);
 export type AskStage = z.infer<typeof AskStageSchema>;
 
 export const AskStreamEventSchema = z.discriminatedUnion('event', [
@@ -23,7 +31,13 @@ export const AskStreamEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal('token'), data: z.object({ text: z.string() }) }),
   z.object({
     event: z.literal('final'),
-    data: z.object({ answer: z.string(), answerable: z.boolean(), sources: z.array(AskSourceSchema) }),
+    data: z.object({
+      answer: z.string(),
+      answerable: z.boolean(),
+      sources: z.array(AskSourceSchema),
+      origin: AskOriginSchema.default('book'),
+      web_sources: z.array(AskWebSourceSchema).default([]),
+    }),
   }),
   z.object({ event: z.literal('indexing'), data: z.object({ reason: z.string() }) }),
   z.object({ event: z.literal('error'), data: z.object({ code: z.string(), message: z.string() }) }),
