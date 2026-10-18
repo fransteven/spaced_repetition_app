@@ -7,6 +7,7 @@ import { getReaderData } from '@/lib/services/book-service';
 import { getBookDeckOptions } from '@/lib/services/book-card-service';
 import { ServiceError } from '@/lib/services/service-error';
 import { Reader } from '@/components/reader/reader';
+import { KeepAiAwake } from '@/components/reader/keep-ai-awake';
 
 export const metadata: Metadata = {
   title: 'Reader — NeuroCards',
@@ -40,14 +41,17 @@ export default async function ReadPage({ params, searchParams }: Props): Promise
   const deckOptions = await getBookDeckOptions(userId, data.book.id);
 
   return (
-    <Reader
-      key={data.book.id}
-      book={data.book}
-      initialAnnotations={data.annotations}
-      initialBookmarks={data.bookmarks}
-      initialPreferences={data.preferences}
-      initialDeckOptions={deckOptions}
-      startCfi={typeof cfi === 'string' && cfi.startsWith('epubcfi(') ? cfi : null}
-    />
+    <>
+      <KeepAiAwake />
+      <Reader
+        key={data.book.id}
+        book={data.book}
+        initialAnnotations={data.annotations}
+        initialBookmarks={data.bookmarks}
+        initialPreferences={data.preferences}
+        initialDeckOptions={deckOptions}
+        startCfi={typeof cfi === 'string' && cfi.startsWith('epubcfi(') ? cfi : null}
+      />
+    </>
   );
 }

@@ -56,10 +56,14 @@ async function probe(origin: string, deadline: number): Promise<void> {
   }
 }
 
-/** Resolves once the service at `origin` answers `/health`; rejects with UNAVAILABLE when it does not in time. */
-export async function wakeService(origin: string): Promise<void> {
+/**
+ * Resolves once the service at `origin` answers `/health`; rejects with UNAVAILABLE when it does not in time.
+ * `force` probes even if the service answered recently: a keep-alive ping must reach the host, or it would
+ * fall asleep behind this instance's cache.
+ */
+export async function wakeService(origin: string, options: { force?: boolean } = {}): Promise<void> {
   const timeout = wakeTimeoutMs();
-  if (timeout === 0 || (awakeUntil.get(origin) ?? 0) > Date.now()) return;
+  if (timeout === 0 || (!options.force && (awakeUntil.get(origin) ?? 0) > Date.now())) return;
 
   const running = probing.get(origin);
   if (running) return running;

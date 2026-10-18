@@ -25,9 +25,12 @@ export function getLlmServiceConfig(): LlmServiceConfig {
   return { baseUrl, token };
 }
 
-/** Wakes the service if it sleeps (free hosting); resolves at once when it answered recently. */
-export async function warmLlmService(): Promise<void> {
-  await wakeService(getLlmServiceConfig().baseUrl);
+/**
+ * Wakes the service if it sleeps (free hosting); resolves at once when it answered recently, unless `force`
+ * (a keep-alive ping that must reach the host).
+ */
+export async function warmLlmService(options: { force?: boolean } = {}): Promise<void> {
+  await wakeService(getLlmServiceConfig().baseUrl, options);
 }
 
 // What a host answers while it has no running instance to hand the request to.
