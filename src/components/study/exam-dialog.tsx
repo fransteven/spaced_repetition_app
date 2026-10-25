@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { GraduationCap, Send, Loader2 } from "lucide-react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
+import { GraduationCap, Send, Loader2, X } from "lucide-react"
 import {
   Dialog,
+  DialogClose,
   DialogPortal,
   DialogBackdrop,
   DialogPopup,
@@ -11,6 +12,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import { useVisualViewport } from "@/hooks/use-visual-viewport"
 import type { FsrsRating } from "@/lib/fsrs/types"
 
 interface ExamMessage {
@@ -30,6 +33,9 @@ interface ExamTurnResponse {
   verdict: ExamVerdict | null
   examToken: string
 }
+
+// Tallest the answer box grows before it scrolls (about six lines).
+const INPUT_MAX_HEIGHT_PX = 160
 
 const VERDICT_STYLE: Record<FsrsRating, { label: string; className: string }> = {
   again: { label: "Again", className: "bg-error text-on-error" },
@@ -56,6 +62,12 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
   const startedRef = useRef(false)
   const lastAttemptRef = useRef<ExamMessage[]>([])
   const examTokenRef = useRef<string | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  // On phones the sheet is pinned to the visible area so the keyboard never covers the answer box.
+  const viewport = useVisualViewport(open)
+  const viewportVars: CSSProperties & Record<`--${string}`, string> = viewport
+    ? { "--exam-vv-height": `${viewport.height}px`, "--exam-vv-top": `${viewport.offsetTop}px` }
+    : {}
 
   const requestTurn = async (nextMessages: ExamMessage[]) => {
     lastAttemptRef.current = nextMessages
@@ -106,9 +118,18 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  // Keep the latest message in view, also when the keyboard opens and the sheet shrinks.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
-  }, [messages, loading])
+  }, [messages, loading, viewport?.height])
+
+  // Grow the answer box with its text so the user always sees what they are sending.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${Math.min(el.scrollHeight, INPUT_MAX_HEIGHT_PX)}px`
+  }, [input, open])
 
   const handleSend = () => {
     const answer = input.trim()
@@ -131,23 +152,39 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogBackdrop />
-        <DialogPopup className="sm:max-w-lg flex flex-col max-h-[85vh]">
-          <div className="flex items-center gap-2 mb-1">
-            <GraduationCap className="h-5 w-5 text-primary" />
-            <DialogTitle className="mb-0">Quiz me</DialogTitle>
+        <DialogPopup
+          style={viewportVars}
+          className={cn(
+            "flex flex-col overflow-hidden transition-[opacity,scale]",
+            // Phone: full-width sheet that fills exactly the visible area (above the keyboard).
+            "inset-x-0 left-0 top-[var(--exam-vv-top,0px)] h-[var(--exam-vv-height,100dvh)] w-full translate-x-0 translate-y-0 rounded-none",
+            "px-4 pt-[max(1rem,env(safe-area-inset-top))]",
+            viewport?.keyboardOpen ? "pb-2" : "pb-[max(1rem,env(safe-area-inset-bottom))]",
+            // Tablet and up: centred modal.
+            "sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[85dvh] sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:p-6",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 shrink-0 text-primary" />
+            <DialogTitle className="mb-0 flex-1">Quiz me</DialogTitle>
+            <DialogClose
+              render={<Button variant="ghost" size="icon-lg" aria-label="Close quiz" className="-mr-2" />}
+            >
+              <X className="size-5" />
+            </DialogClose>
           </div>
-          <DialogDescription>
+          <DialogDescription className={cn("mb-2 sm:mb-4", viewport?.keyboardOpen && "sr-only")}>
             An AI tutor will pick a skill and quiz you on this card. Its verdict sets the rating.
           </DialogDescription>
 
           <div
             ref={scrollRef}
-            className="flex-1 min-h-[240px] overflow-y-auto flex flex-col gap-3 py-2 pr-1"
+            className="flex-1 min-h-0 sm:min-h-[240px] overflow-y-auto overscroll-contain flex flex-col gap-3 py-2 pr-1"
           >
             {messages.map((m, i) => (
               <div
                 key={i}
-                className={`max-w-[85%] rounded-lg px-4 py-2.5 text-sm leading-relaxed ${
+                className={`max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-4 py-2.5 text-sm leading-relaxed ${
                   m.role === "user"
                     ? "self-end bg-primary text-on-primary"
                     : "self-start bg-surface-container-low text-on-surface"
@@ -165,7 +202,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
           </div>
 
           {error && (
-            <div className="flex items-center justify-between gap-3 bg-error-container px-3 py-2 rounded-lg mb-2">
+            <div className="flex shrink-0 items-center justify-between gap-3 bg-error-container px-3 py-2 rounded-lg mb-2">
               <p className="text-sm text-on-error-container">{error}</p>
               <Button
                 onClick={handleRetry}
@@ -180,7 +217,7 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
           )}
 
           {done && verdict ? (
-            <div className="flex flex-col gap-3 pt-2">
+            <div className="flex shrink-0 flex-col gap-3 pt-2">
               <div className="flex items-center gap-2">
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${VERDICT_STYLE[verdict.rating].className}`}
@@ -195,8 +232,9 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
               </Button>
             </div>
           ) : (
-            <div className="flex gap-2 pt-2">
+            <div className="flex shrink-0 items-end gap-2 pt-2">
               <textarea
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -207,13 +245,17 @@ export function ExamDialog({ open, onOpenChange, cardId, onVerdict }: Props) {
                 }}
                 disabled={loading}
                 placeholder="Type your answer…"
-                rows={2}
-                className="flex-1 resize-none rounded-lg bg-surface-container-low px-3 py-2 text-sm text-on-surface outline-none focus:bg-primary-fixed/10 disabled:opacity-50"
+                rows={1}
+                enterKeyHint="send"
+                aria-label="Your answer"
+                // 16px on phones: iOS zooms the page when a smaller input gets focus.
+                className="min-h-11 flex-1 resize-none overflow-y-auto rounded-lg bg-surface-container-low px-3 py-2.5 text-body-lg text-on-surface outline-none focus:bg-primary-fixed/10 disabled:opacity-50 sm:text-body-md"
               />
               <Button
                 onClick={handleSend}
                 disabled={loading || !input.trim()}
                 size="icon"
+                className="size-11 shrink-0"
                 aria-label="Send answer"
               >
                 <Send className="h-4 w-4" />
