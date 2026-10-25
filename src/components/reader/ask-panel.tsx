@@ -16,11 +16,14 @@ import { MarkdownContent } from '@/components/ui/markdown-content';
 import { FilterChip } from '@/components/primitives/filter-chip';
 import { Pill } from '@/components/primitives/pill';
 import { AI_STARTING_HINT } from '@/hooks/use-slow-start';
+import { useVisualViewport } from '@/hooks/use-visual-viewport';
 
 const INDEX_POLL_MS = 5000;
 const INDEX_POLL_LIMIT = 60; // ~5 minutes
 const HISTORY_TURNS = 6;
 const SLOW_START_MS = 4000; // no event by then: the service is probably waking up (free hosting)
+// From here (md) the panel docks beside the page; below it (phones, small tablets) it takes the whole screen.
+const DOCKED_QUERY = '(min-width: 768px)';
 
 // Whole-section suggestions name their task: a vector search for "Summarize this chapter" cannot find the chapter.
 const SUGGESTIONS: Array<{ label: string; task: AskTask }> = [
@@ -76,9 +79,10 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * "Ask this book", docked beside the page (below it on phones) and non-modal: no backdrop and no blur,
- * so the book stays readable — and keeps turning — while the chat is open. It stays mounted while
- * closed so the conversation survives closing and reopening it.
+ * "Ask this book". From 768 px it docks beside the page and is non-modal: no backdrop and no blur, so
+ * the book stays readable — and keeps turning — while the chat is open. Below that (phones, small
+ * tablets) answers need the room, so it covers the whole visible screen, above the on-screen keyboard.
+ * It stays mounted while closed so the conversation survives closing and reopening it.
  */
 export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, className }: AskPanelProps): React.JSX.Element {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -90,6 +94,11 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
   const nextId = useRef(1);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  // Phones: pin the full-screen panel to the visible area so the keyboard never covers the question box.
+  const viewport = useVisualViewport(open);
+  const viewportVars: React.CSSProperties & Record<`--${string}`, string> = viewport
+    ? { '--ask-vv-height': `${viewport.height}px`, '--ask-vv-top': `${viewport.offsetTop}px` }
+    : {};
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<AskBookFormValues>({
     resolver: zodResolver(AskBookFormSchema),
@@ -113,7 +122,13 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-  }, [messages, phase, stage]);
+  }, [messages, phase, stage, viewport?.height]);
+
+  // Full screen hides the book: close the panel so the reader sees the passage (the chat is kept).
+  const openSource = (source: AskSource): void => {
+    onOpenSource(source);
+    if (!window.matchMedia(DOCKED_QUERY).matches) onClose();
+  };
 
   const ask = async ({ question }: AskBookFormValues, task: AskTask = 'question'): Promise<void> => {
     if (phase !== 'idle') return;
@@ -206,8 +221,15 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
       aria-labelledby="ask-panel-title"
       data-testid="ask-panel"
       hidden={!open}
+      style={viewportVars}
       // Tonal grey, so the panel reads as a layer beside the (white, in Light) page without a dividing line.
-      className={cn('flex min-h-0 flex-col gap-4 bg-surface-container-low text-on-surface', className)}
+      className={cn(
+        'flex min-h-0 flex-col gap-4 bg-surface-container-low text-on-surface',
+        // Below md: full screen over the book, sized to the visible area (shrinks above the keyboard).
+        'fixed inset-x-0 top-[var(--ask-vv-top,0px)] z-40 h-[var(--ask-vv-height,100dvh)] pt-[env(safe-area-inset-top)]',
+        'md:static md:z-auto md:h-auto md:pt-0',
+        className
+      )}
     >
       <div className="px-5 pt-4">
         <div className="flex items-center justify-between gap-3">
@@ -295,7 +317,7 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
                     <li key={source.chunk_id}>
                       <button
                         type="button"
-                        onClick={() => onOpenSource(source)}
+                        onClick={() => openSource(source)}
                         className="flex w-full items-start gap-2 rounded-xl bg-surface-container px-3 py-2 text-left transition-colors hover:bg-surface-container-high"
                       >
                         <span className="text-label-sm font-semibold text-primary tabular">[{source.n}]</span>
@@ -349,10 +371,17 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
         <div ref={endRef} />
       </div>
 
-      <form onSubmit={submit} className="flex items-end gap-2 px-5 pb-5">
+      <form
+        onSubmit={submit}
+        className={cn(
+          'flex shrink-0 items-end gap-2 px-5 md:pb-5',
+          viewport?.keyboardOpen ? 'pb-2' : 'pb-[max(1.25rem,env(safe-area-inset-bottom))]'
+        )}
+      >
         <div className="min-w-0 flex-1">
           <Textarea
             rows={2}
+            className="max-h-40"
             placeholder="Ask about characters, ideas, events…"
             aria-label="Your question"
             aria-invalid={errors.question ? true : undefined}

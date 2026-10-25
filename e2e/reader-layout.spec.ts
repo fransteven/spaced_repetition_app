@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { openReader, probe } from './reader-probe';
 
 /**
- * Reader layout: the top bar never covers the text, "Ask this book" docks beside the page (below it on
- * phones) without blurring the book, and a translation never looks like book text.
+ * Reader layout: the top bar never covers the text, "Ask this book" docks beside the page (full screen
+ * below 768 px) without blurring the book, and a translation never looks like book text.
  */
 
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 0) < 768;
@@ -27,7 +27,7 @@ test('the top bar sits above the page and never covers the text', async ({ page 
   expect(header!.y + header!.height).toBeLessThanOrEqual(firstLine);
 });
 
-test('Ask this book docks beside (or below) the page: the book stays sharp and readable', async ({ page }) => {
+test('Ask this book docks beside the page (full screen on phones): the book stays sharp and readable', async ({ page }) => {
   const before = await pageBox(page);
   const label = await page.getByTestId('page-label').textContent();
 
@@ -38,9 +38,11 @@ test('Ask this book docks beside (or below) the page: the book stays sharp and r
 
   const box = (await panel.boundingBox())!;
   if (isPhone(page)) {
-    // Bottom half: the book keeps the top half.
-    await expect.poll(async () => (await pageBox(page)).bottom).toBeLessThanOrEqual(box.y + 1);
-    expect(box.y).toBeGreaterThan(page.viewportSize()!.height * 0.35);
+    // Full screen, so long answers are comfortable to read; the book underneath keeps its size.
+    expect(box.y).toBeLessThanOrEqual(1);
+    expect(box.height).toBeGreaterThanOrEqual(page.viewportSize()!.height - 1);
+    expect(box.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
+    expect((await pageBox(page)).width).toBe(before.width);
   } else {
     // Beside the page: the book re-paginates narrower, on the same page.
     await expect.poll(async () => (await pageBox(page)).width).toBeLessThan(before.width - 100);

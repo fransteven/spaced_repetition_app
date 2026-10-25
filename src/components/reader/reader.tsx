@@ -559,8 +559,8 @@ export function Reader({
         <Bookmark aria-hidden className="pointer-events-none absolute right-1 top-0 size-5 fill-primary text-primary pointer-fine:right-10" />
       )}
 
-      {/* Book (with its footer) and, when open, the Ask panel: beside it from md, below it on phones.
-          Opening the panel shrinks the book, which re-paginates in place (see remeasure in use-epub-reader). */}
+      {/* Book (with its footer) and, when open, the Ask panel: beside it from md, full screen over it below md.
+          Docking shrinks the book, which re-paginates in place (see remeasure in use-epub-reader). */}
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Page. Only the side margins (and swipes) turn pages: a tap on the text never does, so
@@ -619,7 +619,7 @@ export function Reader({
           bookId={book.id}
           positionHref={location?.href ?? null}
           onOpenSource={(source) => void reader.goToPassage(source.href, source.locator)}
-          className="h-1/2 shrink-0 rounded-t-2xl shadow-ambient-lg md:h-auto md:w-96 md:rounded-none md:shadow-none lg:w-md"
+          className="shrink-0 md:w-96 lg:w-md"
         />
       </div>
 

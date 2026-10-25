@@ -1,43 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { z } from 'zod';
 
+import { installFakeKeyboard, setKeyboard } from './fake-keyboard';
+
 const CreatedResource = z.object({ data: z.object({ id: z.string() }) });
 const Box = z.object({ top: z.number(), bottom: z.number(), height: z.number() });
 
 // Pixels the fake on-screen keyboard takes from the bottom of the screen.
 const KEYBOARD_PX = 320;
-
-/** Replaces window.visualViewport with one we can shrink, like a phone keyboard does. */
-async function installFakeVisualViewport(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const target = new EventTarget();
-    const state = { keyboard: 0 };
-    // Live getters: innerHeight is not final until the viewport meta tag is parsed.
-    const fake = Object.defineProperties(target, {
-      height: { get: () => window.innerHeight - state.keyboard },
-      width: { get: () => window.innerWidth },
-      offsetTop: { value: 0 },
-      offsetLeft: { value: 0 },
-      pageTop: { value: 0 },
-      pageLeft: { value: 0 },
-      scale: { value: 1 },
-    });
-    Object.defineProperty(window, 'visualViewport', { configurable: true, get: () => fake });
-    Object.defineProperty(window, '__setKeyboard', {
-      value: (px: number) => {
-        state.keyboard = px;
-        target.dispatchEvent(new Event('resize'));
-      },
-    });
-  });
-}
-
-async function setKeyboard(page: Page, px: number): Promise<void> {
-  await page.evaluate((value) => {
-    const setter: unknown = Reflect.get(window, '__setKeyboard');
-    if (typeof setter === 'function') setter(value);
-  }, px);
-}
 
 async function boxOf(page: Page, selector: string): Promise<z.infer<typeof Box>> {
   return Box.parse(
@@ -51,7 +21,7 @@ async function boxOf(page: Page, selector: string): Promise<z.infer<typeof Box>>
 test('"Quiz me with AI" fits a phone screen and keeps the answer visible above the keyboard', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'desktop-chrome', 'phone layout');
   test.setTimeout(120_000);
-  await installFakeVisualViewport(page);
+  await installFakeKeyboard(page);
 
   await page.route('**/api/study/exam', async (route) => {
     await route.fulfill({
