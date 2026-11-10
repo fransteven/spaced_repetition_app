@@ -310,3 +310,35 @@ export const readerPreferences = pgTable('reader_preferences', {
   theme:       readerThemeEnum('theme').notNull().default('sepia'),
   updated_at:  timestamp('updated_at').defaultNow().notNull(),
 });
+
+// A mind map ("mental model") of one topic. The Markdown outline is the source of truth;
+// the tree is parsed from it on render (src/lib/mind-maps/parse-markdown.ts).
+export const MIND_MAP_SOURCES = ['app', 'mcp'] as const;
+export type MindMapSource = (typeof MIND_MAP_SOURCES)[number];
+
+export const mindMaps = pgTable('mind_maps', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  user_id:    uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  title:      text('title').notNull(),
+  markdown:   text('markdown').notNull(),
+  node_count: integer('node_count').notNull().default(1),   // cached for the list view
+  source:     text('source', { enum: MIND_MAP_SOURCES }).notNull().default('app'), // 'mcp' = created by an AI assistant
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('mind_maps_user_updated_idx').on(table.user_id, table.updated_at),
+]);
+
+// Personal access tokens for the MCP endpoint (/api/mcp). Only the sha256 of the
+// token is stored; the plaintext is shown once when it is created.
+export const apiTokens = pgTable('api_tokens', {
+  id:           uuid('id').defaultRandom().primaryKey(),
+  user_id:      uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  name:         text('name').notNull(),
+  token_hash:   text('token_hash').notNull().unique(),
+  token_prefix: text('token_prefix').notNull(),   // first characters, to recognise it in the list
+  last_used_at: timestamp('last_used_at'),
+  created_at:   timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('api_tokens_user_idx').on(table.user_id),
+]);

@@ -12,7 +12,7 @@ import { fixtureEpub } from './fixtures/epub';
 /** Seeds the test user and the fixture book in the e2e database branch (idempotent). */
 export default async function globalSetup(): Promise<void> {
   const db = drizzle(neon(assertTestDatabase()), { schema });
-  const { users, books, bookAnnotations, bookBookmarks, readerPreferences } = schema;
+  const { users, books, bookAnnotations, bookBookmarks, readerPreferences, mindMaps, apiTokens } = schema;
 
   // A fresh random password per run: it only lives in e2e/.auth (gitignored) and in this branch.
   const password = crypto.randomBytes(18).toString('base64url');
@@ -40,6 +40,8 @@ export default async function globalSetup(): Promise<void> {
   await db.delete(bookAnnotations).where(eq(bookAnnotations.book_id, BOOK_ID));
   await db.delete(bookBookmarks).where(eq(bookBookmarks.book_id, BOOK_ID));
   await db.delete(readerPreferences).where(eq(readerPreferences.user_id, user.id));
+  await db.delete(mindMaps).where(eq(mindMaps.user_id, user.id));
+  await db.delete(apiTokens).where(eq(apiTokens.user_id, user.id));
 
   fs.mkdirSync(AUTH_DIR, { recursive: true });
   fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify({ email: TEST_EMAIL, password }));

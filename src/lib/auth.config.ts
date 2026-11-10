@@ -2,7 +2,7 @@ import type { NextAuthConfig } from 'next-auth';
 import { NextResponse } from 'next/server';
 
 const AUTH_ROUTES = ['/login', '/register'];
-const PROTECTED_ROUTE_PREFIXES = ['/', '/decks', '/study', '/reminders'];
+const PROTECTED_ROUTE_PREFIXES = ['/', '/decks', '/study', '/reminders', '/mind-maps'];
 
 function isProtectedRoute(pathname: string): boolean {
   return PROTECTED_ROUTE_PREFIXES.some((route) => {

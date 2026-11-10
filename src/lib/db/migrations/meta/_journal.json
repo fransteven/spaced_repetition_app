@@ -141,6 +141,13 @@
       "when": 1791858520024,
       "tag": "0019_reader_editorial_comfort",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794322283965,
+      "tag": "0020_mind_maps",
+      "breakpoints": true
     }
   ]
 }

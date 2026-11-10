@@ -224,6 +224,15 @@ goes through `sanitizeSection()` (`src/components/reader/sanitize-section.ts`: r
 frames, `on*` handlers and script URLs, and adds a `script-src 'none'` CSP). NEVER remove that hook;
 `e2e/reader-security.spec.ts` checks a hostile EPUB stays inert.
 
+### 4.2.2 Mind map tables
+
+`mind_maps` (one mental model per row: `title`, `markdown` = the outline, source of truth;
+`node_count` cached for the list; `source` = `'app'` | `'mcp'`) and `api_tokens` (personal access
+tokens for the MCP endpoint: only `token_hash` = sha256 is stored, plaintext `nck_…` shown once).
+Migration `0020_mind_maps`. The tree is parsed on render by `parseMindMapMarkdown()`
+(`src/lib/mind-maps/parse-markdown.ts`: `#` = centre, `##`/`###` = branches, indented bullets =
+details, max 1000 nodes) and laid out by `layoutMindMap()` (`src/lib/mind-maps/layout.ts`).
+
 ### 4.3 Migration commands
 
 ```bash
@@ -341,6 +350,11 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `GET /api/dictionary?word=&lang=` | — | Reader lookup: en.wiktionary definitions of one word (free, cached; no LLM call) |
 | `POST /api/books/[id]/ask` | `{ question, history?, scope: 'read'\|'all', position_href? }` | "Ask this book": SSE stream from srs-llm-api (§6.5). `202 {status:'indexing'}` while the book is being indexed |
 
+| `POST·GET·DELETE /api/mcp` | MCP JSON-RPC, `Authorization: Bearer nck_…` | Mind map MCP server (Claude Code / Desktop) — see §6.6 |
+| `POST·GET·DELETE /api/mcp/[key]` | MCP JSON-RPC, token in the path | Same server for connector UIs that only take a URL (claude.ai, ChatGPT) |
+
+Mind map and token mutations from the UI are Server Actions in `src/app/actions/mind-map-actions.ts`.
+
 Reader mutations (progress, locations cache, annotations, preferences,
 translation, card suggestion, card creation from a passage and "Ask this book")
 are Server Actions in `src/app/actions/reader-actions.ts` (the question itself goes through
@@ -390,6 +404,16 @@ first waits for `GET /health` (`wakeService()` in `src/lib/service-wake.ts`, up 
 boot. The reader page warms the service with `after()`, the ask route wakes it before spending the
 daily cap, and `startVoiceAttempt` wakes it before issuing the 60 s ticket. Routes and pages that can
 wait have `maxDuration` ≥ 120 s. Never call the service with a bare `fetch`.
+
+### 6.6 Mind map MCP server
+
+`src/lib/mcp/mind-map-mcp-server.ts` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP,
+JSON responses, one server per request) exposes `create_mind_map`, `list_mind_maps`, `get_mind_map`,
+`update_mind_map` for the owner of the token. No delete over MCP. `handleMcpRequest()` resolves the token
+(`resolveApiToken`, hash lookup; malformed tokens never hit the DB), then calls the same
+`mind-map-service` as the UI; maps created there get `source = 'mcp'` ("From AI" pill). Tokens are created
+and revoked in Settings → AI assistants (max 10 per user). Links in tool results use `AUTH_URL` /
+`NEXTAUTH_URL`, else the request origin. claude.ai and ChatGPT need the public HTTPS deployment.
 
 ### 6.3 Study session card ordering (strict — do not reorder)
 

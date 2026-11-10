@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Layers, LayoutDashboard, Settings, type LucideIcon } from "lucide-react"
+import { Bell, BookOpen, Layers, LayoutDashboard, Network, Settings, type LucideIcon } from "lucide-react"
 
 /**
  * Single source of truth for navigation and shell geometry.
@@ -21,6 +21,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: Layers, label: "Decks", href: "/decks" },
   { icon: BookOpen, label: "Library", href: "/library" },
+  { icon: Network, label: "Mind maps", href: "/mind-maps" },
   { icon: Bell, label: "Reminders", href: "/reminders" },
 ]
 

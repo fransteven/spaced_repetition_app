@@ -221,6 +221,17 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
 
 ---
 
+## 10.2 Mapas mentales (`/mind-maps`)
+
+- Lienzo único `MindMapCanvas` (`src/components/mind-maps/mind-map-canvas.tsx`) en editor (vista previa) y visor: `rounded-2xl bg-surface-container-low`, nodos HTML con tokens + aristas SVG en un mismo plano transformado.
+- Jerarquía por profundidad, **sin color decorativo** por rama (§1.4): centro `bg-primary text-on-primary text-headline-sm rounded-2xl`; nivel 1 `bg-card shadow-ambient text-body-md font-semibold rounded-xl`; nivel ≥ 2 `bg-card` + borde fantasma `text-body-sm rounded-lg`. Aristas nivel 1 `stroke-primary/40` (2.5), resto `stroke-outline-variant` (1.5).
+- Rama plegada: pill `+N` `bg-primary-container text-on-primary-container text-label-sm` en el borde exterior del nodo.
+- Toolbar flotante `rounded-full bg-card shadow-ambient` abajo a la derecha (zoom −/+, % en ≥ 640 px, encajar, plegar/expandir, pantalla completa si hay API). Botones `size-11` en móvil, `size-9` desde 640 px.
+- Gestos: arrastrar = mover, pellizco / ctrl+rueda = zoom, rueda = desplazar, tocar una rama = plegar. Teclado con foco en el lienzo: flechas, `+`/`−`, `0` encaja.
+- Origen IA: `Pill tone="primary"` con `Sparkles` "From AI".
+
+---
+
 ## 11. Ejemplos Do / Don't (del código real)
 
 ### 1. Cards y Sombras

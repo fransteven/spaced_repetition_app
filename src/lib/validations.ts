@@ -315,3 +315,36 @@ export const AskBookFormSchema = z.object({
 });
 
 export type AskBookFormValues = z.infer<typeof AskBookFormSchema>;
+
+// ── Mind maps ────────────────────────────────────────────────────────────────
+export const MIND_MAP_MARKDOWN_MAX = 50_000;
+
+export const MindMapTitleSchema = z.string().trim().max(120, 'Keep the title under 120 characters');
+export const MindMapMarkdownSchema = z
+  .string()
+  .trim()
+  .min(1, 'Write the outline in Markdown')
+  .max(MIND_MAP_MARKDOWN_MAX, 'The outline is too long (50,000 characters max)');
+
+export const CreateMindMapSchema = z.object({
+  title:    MindMapTitleSchema.optional(),
+  markdown: MindMapMarkdownSchema,
+});
+
+export const UpdateMindMapSchema = z.object({
+  title:    MindMapTitleSchema.optional(),
+  markdown: MindMapMarkdownSchema.optional(),
+});
+
+export const MindMapFormSchema = z.object({
+  title:    MindMapTitleSchema,
+  markdown: MindMapMarkdownSchema,
+});
+
+export type MindMapFormValues = z.infer<typeof MindMapFormSchema>;
+
+export const CreateApiTokenSchema = z.object({
+  name: z.string().trim().min(1, 'Name the connection').max(60, 'Keep it under 60 characters'),
+});
+
+export type CreateApiTokenValues = z.infer<typeof CreateApiTokenSchema>;
