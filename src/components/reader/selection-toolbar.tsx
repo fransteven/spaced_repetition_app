@@ -6,10 +6,8 @@ import { Copy, Languages, NotebookPen, SquareStack, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { HighlightSwatches } from '@/components/reader/highlight-swatches';
 import type { HighlightColor } from '@/components/reader/reader-theme';
+import { TOOLBAR_EDGE, selectionToolbarPosition } from '@/components/reader/selection-toolbar-position';
 import type { ViewportRect } from '@/components/reader/use-epub-reader';
-
-const GAP = 10;
-const EDGE = 8;
 
 interface SelectionToolbarProps {
   rect: ViewportRect;
@@ -36,19 +34,23 @@ export function SelectionToolbar({
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Above the selection when there is room, otherwise below; clamped to the viewport. The measured
-  // width is pinned: moved next to the screen edge, the toolbar would otherwise wrap onto a second
-  // row, grow taller than measured and cover the very text it is about.
+  // Placed by selectionToolbarPosition(): on touch screens below the selection, so the browser's own
+  // selection menu (which sits above it) never covers the toolbar. The measured width is pinned: moved
+  // next to the screen edge, the toolbar would otherwise wrap onto a second row, grow taller than
+  // measured and cover the very text it is about.
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
     // Layout size, not getBoundingClientRect(): the pop-in animation scales the toolbar while it opens.
     const width = node.offsetWidth + 1;
     const height = node.offsetHeight;
-    const above = rect.top - height - GAP;
-    const top = above >= EDGE ? above : Math.min(rect.bottom + GAP, window.innerHeight - height - EDGE);
-    const centered = rect.left + rect.width / 2 - width / 2;
-    const left = Math.min(Math.max(centered, EDGE), window.innerWidth - width - EDGE);
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    const { top, left } = selectionToolbarPosition(
+      rect,
+      { width, height },
+      { width: window.innerWidth, height: window.innerHeight },
+      touch,
+    );
     setPosition({ top, left, width });
   }, [rect]);
 
@@ -59,7 +61,7 @@ export function SelectionToolbar({
       aria-label="Selection actions"
       onMouseDown={(event) => event.preventDefault()}
       className="fixed z-40 flex max-w-[calc(100vw-1rem)] animate-pop-in flex-wrap items-center justify-center gap-1 rounded-2xl bg-popover p-1.5 text-popover-foreground shadow-ambient-lg"
-      style={position ? { top: position.top, left: position.left, width: position.width } : { top: -9999, left: EDGE }}
+      style={position ? { top: position.top, left: position.left, width: position.width } : { top: -9999, left: TOOLBAR_EDGE }}
     >
       <div className="mr-1 rounded-full bg-surface-container px-0.5">
         <HighlightSwatches active={activeColor} onPick={onColor} />

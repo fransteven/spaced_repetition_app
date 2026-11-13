@@ -698,6 +698,12 @@ export function useEpubReader(options: Options): EpubReader {
         };
         doc.addEventListener('pointerup', release);
         doc.addEventListener('pointercancel', release);
+        // Touch screens: Android Chrome opens its "Copy · Select all" menu from the long-press context
+        // menu event; cancelling it keeps the selection and its handles but drops that menu, which would
+        // otherwise sit on top of our own toolbar. (iOS cannot be stopped; the toolbar is placed clear of it.)
+        if (window.matchMedia('(pointer: coarse)').matches) {
+          doc.addEventListener('contextmenu', (event: Event) => event.preventDefault());
+        }
       });
 
       rendition.on('layout', (props: unknown) => {
