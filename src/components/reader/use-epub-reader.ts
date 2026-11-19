@@ -22,6 +22,7 @@ import {
 } from '@/components/reader/reader-gestures';
 import { resolveBookLink } from '@/components/reader/book-links';
 import { sanitizeSection } from '@/components/reader/sanitize-section';
+import { scaleBookFonts } from '@/components/reader/scale-book-fonts';
 
 /**
  * use-epub-reader.ts — owns the epub.js Book/Rendition lifecycle.
@@ -699,6 +700,16 @@ export function useEpubReader(options: Options): EpubReader {
       rendition.hooks.content.register((contents: Contents) => {
         applyStyle(contents, latest.current.css, latest.current.language);
         const doc = contents.document;
+        // Books sized in pt/px would ignore Text size: their sizes become rem (see scale-book-fonts.ts).
+        scaleBookFonts(doc, STYLE_ID);
+        const frameView = doc.defaultView;
+        doc.querySelectorAll('link[rel~="stylesheet"]').forEach((link) => {
+          if (!frameView || !(link instanceof frameView.HTMLLinkElement) || link.sheet) return;
+          link.addEventListener('load', () => {
+            scaleBookFonts(doc, STYLE_ID);
+            refreshMarks();
+          }, { once: true });
+        });
         // The book font arrives after the first paint (font-display: swap) and reflows the text.
         const refresh = (): void => refreshMarks();
         void doc.fonts.ready.then(refresh);

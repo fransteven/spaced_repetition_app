@@ -214,3 +214,42 @@ test('minimum and maximum text sizes remain editable after a database round trip
   );
   expect(previewFits).toBe(true);
 });
+
+test('text size also scales books sized in points, keeping their proportions', async ({ page }) => {
+  const sizes = (): Promise<{ root: number; text: number; line: number; title: number }> =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>('.epub-container iframe')?.contentDocument;
+      const px = (element: Element | null | undefined, property: 'fontSize' | 'lineHeight'): number =>
+        element ? parseFloat(getComputedStyle(element)[property]) : 0;
+      return {
+        root: px(doc?.documentElement, 'fontSize'),
+        text: px(doc?.getElementById('fixed-text'), 'fontSize'),
+        line: px(doc?.getElementById('fixed-text'), 'lineHeight'),
+        title: px(doc?.getElementById('fixed-title'), 'fontSize'),
+      };
+    });
+
+  await page.getByRole('button', { name: 'Contents' }).click();
+  await page.getByRole('dialog').getByText('Chapter 3').click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.frameLocator('.epub-container iframe').locator('#fixed-text')).toBeAttached();
+  await expect.poll(async () => (await sizes()).text).toBeGreaterThan(0);
+  const before = await sizes();
+  expect(before.title).toBeGreaterThan(before.text);
+
+  await settings(page);
+  for (let i = 0; i < 3; i += 1) await page.getByRole('button', { name: 'Larger text', exact: true }).click();
+  await expect.poll(async () => (await sizes()).root).toBeGreaterThan(before.root);
+  const after = await sizes();
+  const ratio = after.root / before.root;
+  expect(after.text / before.text).toBeCloseTo(ratio, 1);
+  expect(after.line / before.line).toBeCloseTo(ratio, 1);
+  expect(after.title / before.title).toBeCloseTo(ratio, 1);
+
+  // Leave the shared reading position on chapter 1 for the other suites.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.getByRole('button', { name: 'Contents' }).click();
+  await page.getByRole('dialog').getByText('Chapter 1').click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+});

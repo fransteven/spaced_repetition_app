@@ -224,6 +224,11 @@ goes through `sanitizeSection()` (`src/components/reader/sanitize-section.ts`: r
 frames, `on*` handlers and script URLs, and adds a `script-src 'none'` CSP). NEVER remove that hook;
 `e2e/reader-security.spec.ts` checks a hostile EPUB stays inert.
 
+Text size only changes the root font size, so each loaded section goes through `scaleBookFonts()`
+(`src/components/reader/scale-book-fonts.ts`), which rewrites the book's absolute `font-size` / `line-height`
+(pt, px, absolute keywords) to rem. Publisher EPUBs (Packt, InDesign) size every class in pt and would otherwise
+never grow; `e2e/reader-comfort.spec.ts` checks fixture chapter 3.
+
 ### 4.2.2 Mind map tables
 
 `mind_maps` (one mental model per row: `title`, `markdown` = the outline, source of truth;

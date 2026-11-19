@@ -46,6 +46,20 @@ ${body}
 </body></html>`;
 }
 
+// Publisher-style section (Packt, InDesign exports): every class sized in pt through a linked stylesheet,
+// so it only follows Text size once scale-book-fonts.ts rewrites those sizes (reader-comfort.spec.ts).
+const FIXED_CSS = `p.fixed { font-size: 11pt; line-height: 13.2pt; }
+h1.fixed-title { font-size: 24pt; }`;
+
+const FIXED_CHAPTER = `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><title>Chapter 3</title><link href="fixed.css" rel="stylesheet" type="text/css"/></head>
+<body><h1 class="fixed-title" id="fixed-title">Chapter 3</h1>
+<p class="fixed" id="fixed-text">A publisher page sized in points.</p>
+<p class="fixed">Its lines keep their spacing at any text size.</p>
+</body></html>`;
+
 const CONTAINER = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
@@ -63,8 +77,10 @@ const OPF = `<?xml version="1.0" encoding="utf-8"?>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
     <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch3" href="ch3.xhtml" media-type="application/xhtml+xml"/>
+    <item id="fixed-css" href="fixed.css" media-type="text/css"/>
   </manifest>
-  <spine><itemref idref="ch1"/><itemref idref="ch2"/></spine>
+  <spine><itemref idref="ch1"/><itemref idref="ch2"/><itemref idref="ch3"/></spine>
 </package>`;
 
 const NAV = `<?xml version="1.0" encoding="utf-8"?>
@@ -74,6 +90,7 @@ const NAV = `<?xml version="1.0" encoding="utf-8"?>
 <body><nav epub:type="toc"><ol>
   <li><a href="ch1.xhtml">Chapter 1</a></li>
   <li><a href="ch2.xhtml">Chapter 2</a></li>
+  <li><a href="ch3.xhtml">Chapter 3</a></li>
 </ol></nav></body></html>`;
 
 let cached: Promise<Buffer> | null = null;
@@ -87,6 +104,8 @@ export function fixtureEpub(): Promise<Buffer> {
     zip.file('OEBPS/nav.xhtml', NAV);
     zip.file('OEBPS/ch1.xhtml', chapter(1));
     zip.file('OEBPS/ch2.xhtml', chapter(2));
+    zip.file('OEBPS/ch3.xhtml', FIXED_CHAPTER);
+    zip.file('OEBPS/fixed.css', FIXED_CSS);
     return zip.generateAsync({ type: 'nodebuffer', mimeType: 'application/epub+zip' });
   })();
   return cached;
