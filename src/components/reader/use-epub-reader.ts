@@ -20,6 +20,7 @@ import {
   type LastEdgeTurn,
   type PageDirection,
 } from '@/components/reader/reader-gestures';
+import { resolveBookLink } from '@/components/reader/book-links';
 import { sanitizeSection } from '@/components/reader/sanitize-section';
 
 /**
@@ -632,6 +633,32 @@ export function useEpubReader(options: Options): EpubReader {
     contentsList(rendition).forEach((contents) => contents.window.getSelection()?.removeAllRanges());
   }, [endSelection]);
 
+  /** Follows a link inside the book (spine href + optional #fragment, from resolveBookLink). */
+  const followLink = useCallback(async (target: string): Promise<void> => {
+    const rendition = renditionRef.current;
+    if (!rendition) return;
+    cancelAnchorHold();
+    clearSelection();
+    await rendition.display(target);
+    const fragment = target.split('#')[1];
+    if (!fragment) return;
+    let id = fragment;
+    try {
+      id = decodeURIComponent(fragment);
+    } catch {
+      // keep the raw fragment
+    }
+    // Like a saved position, a jump into a section that was not on screen often lands on its first page
+    // (the section is laid out after the jump is computed): hold the target and display it again.
+    for (const contents of contentsList(rendition)) {
+      const element = contents.document.getElementById(id);
+      if (!element) continue;
+      currentCfi.current = contents.cfiFromNode(element);
+      restoreAnchor(RESIZE_SETTLE_MS);
+      return;
+    }
+  }, [cancelAnchorHold, clearSelection, restoreAnchor]);
+
   useEffect(() => {
     if (!container) return;
     let cancelled = false;
@@ -678,6 +705,31 @@ export function useEpubReader(options: Options): EpubReader {
         doc.fonts.addEventListener('loadingdone', refresh);
         // Our own selection pipeline (epub.js's "selected" fires mid-drag and knows nothing about the finger).
         doc.addEventListener('selectionchange', () => handleSelectionChange(contents));
+        // Links: epub.js's own handler cannot resolve them once the <base> is gone (see book-links.ts).
+        // Capture phase, so its onclick and the tap-toggles-chrome listener never see the click.
+        doc.addEventListener(
+          'click',
+          (event: MouseEvent) => {
+            const view = doc.defaultView;
+            if (!view || !(event.target instanceof view.Element)) return;
+            const anchor = event.target.closest('a[href]');
+            if (!anchor) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const selection = contents.window.getSelection();
+            if (selection && !selection.isCollapsed) return;
+            const section = book.spine.get(contents.sectionIndex);
+            const link = section ? resolveBookLink(anchor.getAttribute('href') ?? '', section.href) : null;
+            if (!link) return;
+            if (link.kind === 'external') {
+              window.open(link.url, '_blank', 'noopener,noreferrer');
+              return;
+            }
+            if (!book.spine.get(link.target)) return;
+            followLink(link.target).catch((error: unknown) => console.error('[reader] link', error));
+          },
+          true
+        );
         doc.addEventListener('pointerdown', () => {
           pointerDown.current = true;
         });
@@ -851,6 +903,7 @@ export function useEpubReader(options: Options): EpubReader {
     checkAnchor,
     clearSelection,
     endSelection,
+    followLink,
     guardScroll,
     handleSelectionChange,
     pageBox,

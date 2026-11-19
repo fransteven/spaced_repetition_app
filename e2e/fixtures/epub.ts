@@ -27,6 +27,12 @@ const HOSTILE = `<script>window.parent.__bookScriptRan = 'script';</script>
 </p>
 <iframe id="hostile-frame" srcdoc="&lt;script&gt;parent.parent.__bookScriptRan='iframe'&lt;/script&gt;"></iframe>`;
 
+// Links between and within sections (reader-links.spec.ts).
+const LINKS = `<p id="links">Jump <a id="link-back" href="ch1.xhtml">back home</a>, to
+  <a id="link-end" href="ch1.xhtml#ch1-end">the closing words</a> or
+  <a id="link-local" href="#ch2-end">down below</a>.</p>`;
+const ORDINAL = ['zeroth', 'first', 'second'];
+
 function chapter(number: number): string {
   const body = Array.from({ length: 40 }, (_, index) => paragraph(number, index)).join('\n');
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -34,8 +40,9 @@ function chapter(number: number): string {
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head><title>Chapter ${number}</title>${number === 2 ? '<script>window.parent.__bookScriptRan = "head";</script>' : ''}</head>
 <body><h1>Chapter ${number}</h1>
-${number === 2 ? HOSTILE : ''}
+${number === 2 ? `${HOSTILE}\n${LINKS}` : ''}
 ${body}
+<p id="ch${number}-end">Closing words of the ${ORDINAL[number]} chapter.</p>
 </body></html>`;
 }
 
