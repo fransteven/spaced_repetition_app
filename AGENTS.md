@@ -213,7 +213,8 @@ Phase 3 adds pgvector (custom migration `0011`), `book_chunks` (768-dim OpenAI
 `text-embedding-3-small` vectors, exact per-book search — no global ANN index),
 `books.index_status`, `books.index_fingerprint` (provider:model:dims:chunker:ctx|hdr of the
 current index; a mismatch rebuilds it), `book_chunks.heading/context` (subsection + contextual-retrieval
-note written at index time) with the generated `search_tsv` full-text column and `llm_usage` (per-user daily cap on paid
+note written at index time; Render runs with `RAG_CONTEXTUAL_CHUNKS=false` to cut indexing cost, so `context` is
+null and fingerprints end in `hdr`) with the generated `search_tsv` full-text column and `llm_usage` (per-user daily cap on paid
 LLM calls). Chunks are written by the srs-llm-api service through the internal API
 (§6.5), never directly.
 Plans: `docs/plans/epub-reader-fase-1.md` … `epub-reader-fase-3-langgraph.md`.
