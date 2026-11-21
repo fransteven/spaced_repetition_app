@@ -1,7 +1,7 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 
 import { resolveApiToken } from '@/lib/services/api-token-service';
-import { buildMindMapMcpServer } from '@/lib/mcp/mind-map-mcp-server';
+import { buildMindMapMcpServer } from '@/lib/mcp/neurocards-mcp-server';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
