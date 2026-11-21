@@ -342,3 +342,25 @@ export const apiTokens = pgTable('api_tokens', {
 }, (table) => [
   index('api_tokens_user_idx').on(table.user_id),
 ]);
+
+// A self-contained HTML explainer ("canvas") made by an LLM. The HTML is stored as-is (never
+// sanitised: that would break its scripts) and is only served by /api/canvases/[id]/raw inside an
+// opaque-origin sandbox (src/lib/canvases/csp.ts). Plan: docs/plans/canvas-html.md.
+export const CANVAS_SOURCES = ['upload', 'mcp'] as const;
+export type CanvasSource = (typeof CANVAS_SOURCES)[number];
+
+export const canvases = pgTable('canvases', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  user_id:     uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  deck_id:     uuid('deck_id').references(() => decks.id, { onDelete: 'set null' }),
+  title:       text('title').notNull(),
+  description: text('description'),
+  html:        text('html').notNull(),
+  size_bytes:  integer('size_bytes').notNull(),     // UTF-8 bytes of html, for the per-user quota
+  source:      text('source', { enum: CANVAS_SOURCES }).notNull().default('upload'), // 'mcp' = created by an AI assistant
+  created_at:  timestamp('created_at').defaultNow().notNull(),
+  updated_at:  timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('canvases_user_updated_idx').on(table.user_id, table.updated_at),
+  index('canvases_deck_idx').on(table.deck_id),
+]);

@@ -229,6 +229,8 @@ El lector (`/read/[id]`) es inmersivo como `/study`: sin shell, chrome mínimo y
 - Toolbar flotante `rounded-full bg-card shadow-ambient` abajo a la derecha (zoom −/+, % en ≥ 640 px, encajar, plegar/expandir, pantalla completa si hay API). Botones `size-11` en móvil, `size-9` desde 640 px.
 - Gestos: arrastrar = mover, pellizco / ctrl+rueda = zoom, rueda = desplazar, tocar una rama = plegar. Teclado con foco en el lienzo: flechas, `+`/`−`, `0` encaja.
 - Origen IA: `Pill tone="primary"` con `Sparkles` "From AI".
+- Pestañas Mind maps · Canvases (`mind-maps-tabs.tsx`): fila de `FilterChip` renderizados como `Link` (cada pestaña es una ruta, `aria-current="page"` en la activa), bajo la descripción del `PageHeader` (`mt-6`). Sin ítem nuevo en la navegación.
+- Visor de canvas (`/mind-maps/canvases/[id]`): inmersivo como `/read`, sin shell. Barra `h-14 sm:h-16` con volver (`icon-lg`), título `text-body-sm font-semibold` truncado + "AI-generated content" en `text-label-sm`, y renombrar/borrar. Debajo, el iframe ocupa el resto (`flex-1`, `bg-surface-container-lowest`); su contenido es del LLM y no sigue los tokens.
 
 ---
 

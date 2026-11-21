@@ -238,6 +238,20 @@ Migration `0020_mind_maps`. The tree is parsed on render by `parseMindMapMarkdow
 (`src/lib/mind-maps/parse-markdown.ts`: `#` = centre, `##`/`###` = branches, indented bullets =
 details, max 1000 nodes) and laid out by `layoutMindMap()` (`src/lib/mind-maps/layout.ts`).
 
+### 4.2.3 Canvases (LLM-written HTML)
+
+`canvases` (migration `0021_canvases`): one self-contained HTML explainer per row, `html` stored as-is
+in Postgres (≤ 2 MB, ≤ 200 per user, ≤ 50 MB per user in total; `size_bytes` cached for the quota),
+`source` = `'upload'` | `'mcp'`, optional `deck_id` (set null on deck delete). UI: the "Canvases" tab of
+Mind maps (`/mind-maps/canvases`, immersive viewer `/mind-maps/canvases/[id]`).
+The HTML is NEVER sanitised and NEVER rendered in the app's origin: it is only served by
+`GET /api/canvases/[id]/raw` with the CSP from `src/lib/canvases/csp.ts` (`sandbox allow-scripts`,
+`connect-src 'none'`, scripts inline or from a CDN allowlist) and shown in
+`<iframe sandbox="allow-scripts">`. NEVER add `allow-same-origin`, `allow-top-navigation*`,
+`allow-popups` or `allow-forms`. `prepareCanvasHtml()` injects an in-memory `localStorage` shim
+(Web Storage throws in an opaque origin). `e2e/canvas-security.spec.ts` checks a hostile canvas
+stays inert. Plan: `docs/plans/canvas-html.md`.
+
 ### 4.3 Migration commands
 
 ```bash
@@ -354,11 +368,14 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `GET /api/books/[id]/file` · `/cover` | — | Streams the private blob after an ownership check |
 | `GET /api/dictionary?word=&lang=` | — | Reader lookup: en.wiktionary definitions of one word (free, cached; no LLM call) |
 | `POST /api/books/[id]/ask` | `{ question, history?, scope: 'read'\|'all', position_href? }` | "Ask this book": SSE stream from srs-llm-api (§6.5). `202 {status:'indexing'}` while the book is being indexed |
+| `POST /api/canvases` | multipart `file` (.html, ≤ 2 MB, UTF-8), `title?` | Saves a canvas (§4.2.3); title from `title`, else `<title>`, else the file name |
+| `GET /api/canvases/[id]/raw` | — | The canvas document with the sandbox CSP; only for the viewer iframe |
 
 | `POST·GET·DELETE /api/mcp` | MCP JSON-RPC, `Authorization: Bearer nck_…` | Mind map MCP server (Claude Code / Desktop) — see §6.6 |
 | `POST·GET·DELETE /api/mcp/[key]` | MCP JSON-RPC, token in the path | Same server for connector UIs that only take a URL (claude.ai, ChatGPT) |
 
-Mind map and token mutations from the UI are Server Actions in `src/app/actions/mind-map-actions.ts`.
+Mind map and token mutations from the UI are Server Actions in `src/app/actions/mind-map-actions.ts`;
+canvas rename/delete are in `src/app/actions/canvas-actions.ts`.
 
 Reader mutations (progress, locations cache, annotations, preferences,
 translation, card suggestion, card creation from a passage and "Ask this book")

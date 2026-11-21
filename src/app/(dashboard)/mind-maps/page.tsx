@@ -9,6 +9,7 @@ import { SectionHeading } from '@/components/primitives/section-heading';
 import { EmptyState } from '@/components/primitives/empty-state';
 import { buttonVariants } from '@/components/ui/button';
 import { MindMapCard } from '@/components/mind-maps/mind-map-card';
+import { MindMapsTabs } from '@/components/mind-maps/mind-maps-tabs';
 import { listMindMaps } from '@/lib/services/mind-map-service';
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default async function MindMapsPage(): Promise<React.JSX.Element> {
           See a whole topic at once. Write an outline in Markdown, or ask Claude or ChatGPT to build the map and
           save it here.
         </p>
+        <MindMapsTabs active="maps" className="mt-6" />
       </PageHeader>
 
       <PageSection className="space-y-6 sm:space-y-8">

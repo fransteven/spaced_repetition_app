@@ -148,6 +148,13 @@
       "when": 1794322283965,
       "tag": "0020_mind_maps",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795079369429,
+      "tag": "0021_canvases",
+      "breakpoints": true
     }
   ]
 }

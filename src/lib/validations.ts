@@ -1,7 +1,15 @@
 import { READER_THEME_VALUES, READER_FONT_VALUES, READER_SCALE_MIN, READER_SCALE_MAX } from '@/lib/reader-options';
+import { MAX_CANVAS_SIZE_BYTES, MAX_CANVAS_TITLE_LENGTH, utf8ByteLength } from '@/lib/canvases/limits';
 import { z } from 'zod';
 import { EMBEDDING_DIMENSIONS } from '@/lib/rag/constants';
 import { AUTO_DETECT, LANGUAGE_CODES } from '@/lib/translation/languages';
+
+/**
+ * Row ids. Checks the 8-4-4-4-12 hex shape that a Postgres `uuid` column accepts, not the
+ * RFC 9562 version/variant bits: rows written outside the app (e.g. hand-written SQL) can
+ * carry ids like `4a587baa-bd0f-e5ba-…` that `z.uuid()` rejects although they exist.
+ */
+export const DbIdSchema = z.guid();
 
 export const RegisterSchema = z.object({
   name:     z.string().min(1).max(100),
@@ -348,3 +356,25 @@ export const CreateApiTokenSchema = z.object({
 });
 
 export type CreateApiTokenValues = z.infer<typeof CreateApiTokenSchema>;
+
+// ── Canvases (LLM-written HTML explainers) ──────────────────────────────────────
+export const CanvasTitleSchema = z
+  .string()
+  .trim()
+  .min(1, 'Give the canvas a title')
+  .max(MAX_CANVAS_TITLE_LENGTH, `Keep the title under ${MAX_CANVAS_TITLE_LENGTH} characters`);
+
+export const CanvasHtmlSchema = z
+  .string()
+  .refine((html) => html.trim().length > 0, 'The HTML file is empty')
+  .refine((html) => utf8ByteLength(html) <= MAX_CANVAS_SIZE_BYTES, 'A canvas can be up to 2 MB');
+
+export const CreateCanvasSchema = z.object({
+  title:       CanvasTitleSchema.optional(),
+  html:        CanvasHtmlSchema,
+  description: z.string().trim().max(500).optional(),
+  deck_id:     DbIdSchema.optional(),
+});
+
+export const RenameCanvasSchema = z.object({ title: CanvasTitleSchema });
+export type RenameCanvasValues = z.infer<typeof RenameCanvasSchema>;

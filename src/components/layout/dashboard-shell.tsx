@@ -24,8 +24,9 @@ export function DashboardShell({
   hasDueCards = false,
 }: DashboardShellProps): React.JSX.Element {
   const pathname = usePathname()
-  // Study sessions and the reader are immersive — no shell chrome.
-  const isImmersive = pathname.startsWith("/study") || pathname.startsWith("/read")
+  // Study sessions, the reader and the canvas viewer are immersive — no shell chrome.
+  const isImmersive =
+    pathname.startsWith("/study") || pathname.startsWith("/read") || /^\/mind-maps\/canvases\/[^/]+$/.test(pathname)
 
   if (isImmersive) {
     return <>{children}</>
