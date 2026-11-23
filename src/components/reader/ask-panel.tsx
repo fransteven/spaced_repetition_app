@@ -66,6 +66,8 @@ interface AskPanelProps {
   positionHref: string | null;
   onOpenSource: (source: AskSource) => void;
   className?: string;
+  /** Answers come from the server: asking is disabled while offline (the conversation stays readable). */
+  offline?: boolean;
 }
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
@@ -84,7 +86,15 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
  * tablets) answers need the room, so it covers the whole visible screen, above the on-screen keyboard.
  * It stays mounted while closed so the conversation survives closing and reopening it.
  */
-export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, className }: AskPanelProps): React.JSX.Element {
+export function AskPanel({
+  open,
+  onClose,
+  bookId,
+  positionHref,
+  onOpenSource,
+  className,
+  offline = false,
+}: AskPanelProps): React.JSX.Element {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [scope, setScope] = useState<'read' | 'all'>('read');
   const [phase, setPhase] = useState<'idle' | 'working' | 'indexing'>('idle');
@@ -131,7 +141,7 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
   };
 
   const ask = async ({ question }: AskBookFormValues, task: AskTask = 'question'): Promise<void> => {
-    if (phase !== 'idle') return;
+    if (phase !== 'idle' || offline) return;
     setError(null);
     const history = messages
       .filter((message) => !message.streaming && message.content)
@@ -262,6 +272,7 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
                   variant="ghost"
                   size="sm"
                   className="h-auto max-w-full shrink whitespace-normal rounded-full bg-surface-container-high px-3 py-1.5 text-left"
+                  disabled={offline}
                   onClick={() => {
                     setValue('question', suggestion.label);
                     void handleSubmit((values) => ask(values, suggestion.task))();
@@ -368,6 +379,11 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
           </div>
         )}
         {error && <p className="text-body-sm text-destructive">{error}</p>}
+        {offline && (
+          <p className="text-body-sm text-on-surface-variant" data-testid="ask-offline-hint">
+            Asking requires a connection.
+          </p>
+        )}
         <div ref={endRef} />
       </div>
 
@@ -385,7 +401,7 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
             placeholder="Ask about characters, ideas, events…"
             aria-label="Your question"
             aria-invalid={errors.question ? true : undefined}
-            disabled={phase !== 'idle'}
+            disabled={phase !== 'idle' || offline}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -396,7 +412,7 @@ export function AskPanel({ open, onClose, bookId, positionHref, onOpenSource, cl
           />
           {errors.question && <p className="pt-1 text-body-sm text-destructive">{errors.question.message}</p>}
         </div>
-        <Button type="submit" size="icon-lg" className="rounded-full" aria-label="Ask" disabled={phase !== 'idle'}>
+        <Button type="submit" size="icon-lg" className="rounded-full" aria-label="Ask" disabled={phase !== 'idle' || offline}>
           <ArrowUp />
         </Button>
       </form>

@@ -78,7 +78,7 @@ export const processUploadedBook = inngest.createFunction(
   }
 );
 
-const BookEventSchema = z.object({ bookId: z.string().uuid() });
+const BookEventSchema = z.object({ bookId: z.guid() });
 const IndexStartSchema = z.object({ status: z.enum(['started', 'already_running']) });
 
 // Asks srs-llm-api to index a book for "Ask the book". The service answers 202 and keeps working in the

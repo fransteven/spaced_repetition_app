@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { bookAnnotations, bookBookmarks, bookSections, books } from '@/lib/db/schema';
@@ -183,12 +183,28 @@ export async function updateBookMetadata(
 
 export async function saveReadingProgress(
   userId: string,
-  input: { book_id: string; cfi: string; progress: number }
+  input: { book_id: string; cfi: string; progress: number; client_updated_at?: string }
 ): Promise<void> {
+  const now = new Date();
+  if (input.client_updated_at === undefined) {
+    await db
+      .update(books)
+      .set({ last_cfi: input.cfi, progress: input.progress, last_read_at: now })
+      .where(and(eq(books.id, input.book_id), eq(books.user_id, userId)));
+    return;
+  }
+
+  // Offline flush: the position was taken at client_updated_at (capped at now, a clock ahead
+  // must not pin the book to the future). A later save from any device wins.
+  const clientAt = new Date(Math.min(new Date(input.client_updated_at).getTime(), now.getTime()));
   await db
     .update(books)
-    .set({ last_cfi: input.cfi, progress: input.progress, last_read_at: new Date() })
-    .where(and(eq(books.id, input.book_id), eq(books.user_id, userId)));
+    .set({ last_cfi: input.cfi, progress: input.progress, last_read_at: clientAt })
+    .where(and(
+      eq(books.id, input.book_id),
+      eq(books.user_id, userId),
+      or(isNull(books.last_read_at), lt(books.last_read_at, clientAt)),
+    ));
 }
 
 export async function saveBookLocations(

@@ -2,13 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { signOut } from "next-auth/react"
-import { LogOut, Search } from "lucide-react"
+import { Download, LogOut, Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
+import { useLogout } from "@/components/offline/use-logout"
 import {
   isNavActive,
   NAV_TAGLINE,
@@ -16,6 +16,8 @@ import {
   SECONDARY_NAV,
   type NavItem,
 } from "@/components/layout/nav-config"
+
+const DOWNLOADS_NAV: NavItem = { icon: Download, label: "Downloads", href: "/offline" }
 
 /**
  * Navigation for everything below `lg`. The bottom tab bar only carries four
@@ -30,6 +32,7 @@ export function MobileDrawer({
   onOpenChange: (open: boolean) => void
 }) {
   const pathname = usePathname()
+  const { requestLogout, busy: signingOut, dialog: logoutDialog } = useLogout()
 
   const renderLink = (item: NavItem) => {
     const active = isNavActive(pathname, item.href)
@@ -54,45 +57,52 @@ export function MobileDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="bg-surface-container-low lg:hidden">
-        <SheetHeader>
-          <SheetTitle className="text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold">
-            {NAV_TAGLINE}
-          </SheetTitle>
-        </SheetHeader>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="left" className="bg-surface-container-low lg:hidden">
+          <SheetHeader>
+            <SheetTitle className="text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold">
+              {NAV_TAGLINE}
+            </SheetTitle>
+          </SheetHeader>
 
-        <div className="px-4 mb-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false)
-              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
-            }}
-            className="w-full justify-start gap-2 text-on-surface-variant text-body-sm h-11"
-          >
-            <Search className="size-4 text-outline" />
-            <span>Search decks… (⌘K)</span>
-          </Button>
-        </div>
+          <div className="px-4 mb-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false)
+                window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
+              }}
+              className="w-full justify-start gap-2 text-on-surface-variant text-body-sm h-11"
+            >
+              <Search className="size-4 text-outline" />
+              <span>Search decks… (⌘K)</span>
+            </Button>
+          </div>
 
-        <nav className="space-y-1 px-4">{PRIMARY_NAV.map(renderLink)}</nav>
+          <nav className="space-y-1 px-4">{PRIMARY_NAV.map(renderLink)}</nav>
 
-        <div className="mt-auto space-y-4 px-4 pb-6">
-          <nav className="space-y-1">{SECONDARY_NAV.map(renderLink)}</nav>
-          <ThemeToggle className="w-fit" />
-          <Button
-            variant="ghost"
-            size="lg"
-            className="min-h-11 w-full justify-start px-4 text-on-surface-variant"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-          >
-            <LogOut className="h-5 w-5" />
-            Sign out
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
+          <div className="mt-auto space-y-4 px-4 pb-6">
+            <nav className="space-y-1">{[...SECONDARY_NAV, DOWNLOADS_NAV].map(renderLink)}</nav>
+            <ThemeToggle className="w-fit" />
+            <Button
+              variant="ghost"
+              size="lg"
+              className="min-h-11 w-full justify-start px-4 text-on-surface-variant"
+              disabled={signingOut}
+              onClick={() => {
+                onOpenChange(false)
+                requestLogout()
+              }}
+            >
+              <LogOut className="h-5 w-5" />
+              {signingOut ? "Signing out…" : "Sign out"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+      {logoutDialog}
+    </>
   )
 }

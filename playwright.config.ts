@@ -13,7 +13,9 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   globalSetup: './e2e/global-setup.ts',
-  use: { baseURL: BASE_URL, trace: 'retain-on-failure' },
+  // Service workers off by default: once one controls a page, page.route no longer sees its requests
+  // (WebKit), and most specs serve the book and dictionary through page.route. e2e/offline.spec.ts opts in.
+  use: { baseURL: BASE_URL, trace: 'retain-on-failure', serviceWorkers: 'block' },
   projects: [
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {

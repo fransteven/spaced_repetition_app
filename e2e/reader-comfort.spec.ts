@@ -166,7 +166,7 @@ test('typography keeps the saved passage on screen after reflow', async ({ page 
 });
 
 
-test('a failed preference request stays visible and can be retried', async ({ page }) => {
+test('a preference save that loses the network is kept on the device and syncs later', async ({ page }) => {
   let interrupted = false;
   await page.route('**/read/**', async (route) => {
     const request = route.request();
@@ -180,11 +180,14 @@ test('a failed preference request stays visible and can be retried', async ({ pa
   });
   await settings(page);
   await page.getByRole('button', { name: 'Sage theme', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Could not save preferences.');
+  // Offline mode (§4.2.4): a network failure queues the change on the device and the outbox
+  // retries it right away, so it still reaches the server without a manual retry.
   await expect(page.locator('html')).toHaveAttribute('data-reader-theme', 'sage');
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Preferences synced across devices');
   expect(interrupted).toBe(true);
+  await page.reload();
+  await expect(page.getByTestId('page-label')).toHaveText(/\d/);
+  await expect(page.locator('html')).toHaveAttribute('data-reader-theme', 'sage');
 });
 
 

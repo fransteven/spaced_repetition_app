@@ -20,6 +20,7 @@ async function assertAnnotationOwnership(userId: string, annotationId: string): 
 export async function createAnnotation(
   userId: string,
   input: {
+    id?: string; // client-generated (offline mode): a retried create returns the existing row
     book_id: string;
     cfi_range: string;
     quote: string;
@@ -29,11 +30,23 @@ export async function createAnnotation(
   }
 ): Promise<BookAnnotation> {
   await assertBookOwnership(userId, input.book_id);
-  const [annotation] = await db
+  const values = { ...input, note: input.note?.trim() || null, user_id: userId };
+  if (input.id === undefined) {
+    const [annotation] = await db.insert(bookAnnotations).values(values).returning();
+    return annotation;
+  }
+
+  const [created] = await db
     .insert(bookAnnotations)
-    .values({ ...input, note: input.note?.trim() || null, user_id: userId })
+    .values(values)
+    .onConflictDoNothing({ target: bookAnnotations.id })
     .returning();
-  return annotation;
+  if (created) return created;
+
+  const [existing] = await db.select().from(bookAnnotations).where(eq(bookAnnotations.id, input.id));
+  if (!existing) throw new ServiceError('NOT_FOUND', 'Annotation not found'); // deleted in between
+  if (existing.user_id !== userId) throw new ServiceError('FORBIDDEN', 'Access denied');
+  return existing;
 }
 
 export async function updateAnnotation(

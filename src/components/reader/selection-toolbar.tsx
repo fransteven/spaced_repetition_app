@@ -18,7 +18,11 @@ interface SelectionToolbarProps {
   onNote: () => void;
   onCopy: () => void;
   onDelete?: () => void;
+  /** Translating and creating a card need the server: shown disabled while offline. */
+  offline?: boolean;
 }
+
+const OFFLINE_HINT = 'Requires a connection';
 
 /** Floating toolbar over a text selection or an existing highlight. */
 export function SelectionToolbar({
@@ -30,6 +34,7 @@ export function SelectionToolbar({
   onNote,
   onCopy,
   onDelete,
+  offline = false,
 }: SelectionToolbarProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -66,10 +71,26 @@ export function SelectionToolbar({
       <div className="mr-1 rounded-full bg-surface-container px-0.5">
         <HighlightSwatches active={activeColor} onPick={onColor} />
       </div>
-      <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Translate" onClick={onTranslate}>
+      <Button
+        variant="ghost"
+        size="icon-lg"
+        className="rounded-full"
+        aria-label="Translate"
+        title={offline ? OFFLINE_HINT : undefined}
+        disabled={offline}
+        onClick={onTranslate}
+      >
         <Languages />
       </Button>
-      <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Create card" onClick={onCard}>
+      <Button
+        variant="ghost"
+        size="icon-lg"
+        className="rounded-full"
+        aria-label="Create card"
+        title={offline ? OFFLINE_HINT : undefined}
+        disabled={offline}
+        onClick={onCard}
+      >
         <SquareStack />
       </Button>
       <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Add note" onClick={onNote}>

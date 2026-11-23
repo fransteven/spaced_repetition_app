@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { ServiceError } from '@/lib/services/service-error';
 
 const PayloadSchema = z.object({
-  userId: z.string().uuid(),
-  cardId: z.string().uuid(),
+  userId: z.guid(),
+  cardId: z.guid(),
   reps: z.number().int().nonnegative(),
   lastReview: z.string().datetime().nullable(),
   cardUpdatedAt: z.string().datetime(),

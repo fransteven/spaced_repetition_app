@@ -253,6 +253,30 @@ The HTML is NEVER sanitised and NEVER rendered in the app's origin: it is only s
 (Web Storage throws in an opaque origin). `e2e/canvas-security.spec.ts` checks a hostile canvas
 stays inert. Plan: `docs/plans/canvas-html.md`.
 
+### 4.2.4 Offline mode (downloaded books and decks)
+
+Books (EPUB + cover) and decks (cards + full schedules + images) can be downloaded to the browser and used
+with no network; changes sync on reconnect. Plan + wire contract: `docs/plans/offline-mode.md`.
+- Storage (client, `src/lib/offline/`): EPUBs stream into **OPFS** (`books/<id>.epub`, IDB Blob fallback),
+  metadata/snapshots/cards/outbox in IndexedDB `neurocards-offline` (`idb`), card images in Cache Storage
+  `nc-images-v1`. `navigator.storage.persist()` on first download; `ensureSpace()` refuses a download that
+  does not fit. Data is per account: `checkOwner()` wipes another account's data, `useLogout()` flushes then wipes.
+- Service worker: hand-written, served by `src/app/sw.js/route.ts` (force-static, BUILD_ID per deploy;
+  source in `src/lib/offline/sw-source.ts`). It precaches the static shells `/offline`, `/offline/read`,
+  `/offline/study` and their `/_next/static` assets, and redirects failed navigations (`/read/:id` →
+  `/offline/read?book=`, `/study/:id` → `/offline/study?deck=`, else `/offline`). It NEVER handles `/api/*`,
+  Server Actions or RSC requests, and never deletes `nc-images-v1`.
+- Every reader/study mutation goes through `src/lib/offline/persistence.ts`: online it calls the action/route,
+  on a network failure it queues in the outbox (`outbox.ts`), flushed by `sync.ts` (online, tab visible, interval).
+- Idempotency: reviews carry `client_review_id` (`review_logs.client_review_id` UNIQUE, migration
+  `0022_offline_reviews`); offline batches go to `POST /api/study/review/sync`, replayed in `reviewed_at`
+  order with the real review time (`applyReview(..., { reviewedAt })`). A review older than the server's
+  `last_review` is `stale` and writes nothing. Annotations accept a client `id`; progress carries
+  `client_updated_at` so a late flush never overwrites newer progress.
+- Session ordering (§6.3) lives in `orderStudyCards()` (`src/lib/study/order-cards.ts`), shared by the server
+  and the offline study shell. AI features (ask, translate, suggest, dictionary, exam, voice) need a connection.
+- `e2e/offline.spec.ts` (Chromium) downloads, goes offline, reads/studies and checks the sync is exactly-once.
+
 ### 4.3 Migration commands
 
 ```bash
@@ -371,8 +395,11 @@ Error codes: `UNAUTHORIZED` · `VALIDATION_ERROR` · `NOT_FOUND` · `FORBIDDEN` 
 | `POST /api/books/[id]/ask` | `{ question, history?, scope: 'read'\|'all', position_href? }` | "Ask this book": SSE stream from srs-llm-api (§6.5). `202 {status:'indexing'}` while the book is being indexed |
 | `POST /api/canvases` | multipart `file` (.html, ≤ 2 MB, UTF-8), `title?` | Saves a canvas (§4.2.3); title from `title`, else `<title>`, else the file name |
 | `GET /api/canvases/[id]/raw` | — | The canvas document with the sandbox CSP; only for the viewer iframe |
+| `POST /api/study/review/sync` | `{ reviews: [{ client_review_id, card_id, rating, reviewed_at }] }` (1–500) | Offline reviews, idempotent; per item `applied`·`duplicate`·`stale`·`not_found` (§4.2.4) |
+| `GET /api/offline/decks/[id]` | — | Deck snapshot for offline study: all cards + full schedules |
+| `GET /api/offline/books/[id]` | — | Reader snapshot (book, annotations, bookmarks, preferences, deck options, file size) |
 
-| `POST·GET·DELETE /api/mcp` | MCP JSON-RPC, `Authorization: Bearer nck_…` | Mind map MCP server (Claude Code / Desktop) — see §6.6 |
+| `POST·GET·DELETE /api/mcp` | MCP JSON-RPC, `Authorization: Bearer nck_…` | NeuroCards MCP server: flashcards + mind maps (Claude Code / Desktop) — see §6.6 |
 | `POST·GET·DELETE /api/mcp/[key]` | MCP JSON-RPC, token in the path | Same server for connector UIs that only take a URL (claude.ai, ChatGPT) |
 
 Mind map and token mutations from the UI are Server Actions in `src/app/actions/mind-map-actions.ts`;
@@ -428,15 +455,23 @@ boot. The reader page warms the service with `after()`, the ask route wakes it b
 daily cap, and `startVoiceAttempt` wakes it before issuing the 60 s ticket. Routes and pages that can
 wait have `maxDuration` ≥ 120 s. Never call the service with a bare `fetch`.
 
-### 6.6 Mind map MCP server
+### 6.6 NeuroCards MCP server (flashcards + mind maps)
 
-`src/lib/mcp/mind-map-mcp-server.ts` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP,
-JSON responses, one server per request) exposes `create_mind_map`, `list_mind_maps`, `get_mind_map`,
-`update_mind_map` for the owner of the token. No delete over MCP. `handleMcpRequest()` resolves the token
-(`resolveApiToken`, hash lookup; malformed tokens never hit the DB), then calls the same
-`mind-map-service` as the UI; maps created there get `source = 'mcp'` ("From AI" pill). Tokens are created
-and revoked in Settings → AI assistants (max 10 per user). Links in tool results use `AUTH_URL` /
-`NEXTAUTH_URL`, else the request origin. claude.ai and ChatGPT need the public HTTPS deployment.
+`src/lib/mcp/neurocards-mcp-server.ts` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP,
+JSON responses, one server per request) exposes, for the owner of the token:
+mind maps `create_mind_map`, `list_mind_maps`, `get_mind_map`, `update_mind_map`, and flashcards
+(`src/lib/mcp/flashcard-tools.ts`) `list_decks`, `create_deck`, `list_cards`, `create_cards` (1–50 per call),
+`update_card`. No delete and no images over MCP. `handleMcpRequest()` resolves the token
+(`resolveApiToken`, hash lookup; malformed tokens never hit the DB), then calls the same services as the UI
+(`mind-map-service`, `deck-service`, `card-service`). Ids are always generated by the database and
+`createCardsForUser` writes cards + their `card_schedules` rows in one transaction. Maps created there get
+`source = 'mcp'` ("From AI" pill). Tokens are created and revoked in Settings → AI assistants (max 10 per user).
+Links in tool results use `AUTH_URL` / `NEXTAUTH_URL`, else the request origin. claude.ai and ChatGPT need the
+public HTTPS deployment. AI assistants must create cards through this server, never with direct SQL (a database
+MCP lets them invent non-RFC ids and skip schedules; see `scripts/backfill-card-schedules.ts`).
+
+Row ids are validated with `DbIdSchema` (`z.guid()`, shape only) in `src/lib/validations.ts`, not `z.uuid()`:
+a few existing cards have ids that are valid for Postgres but not RFC 9562.
 
 ### 6.3 Study session card ordering (strict — do not reorder)
 

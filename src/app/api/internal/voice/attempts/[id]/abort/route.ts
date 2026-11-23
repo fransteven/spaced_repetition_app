@@ -9,7 +9,7 @@ export async function POST(request: Request, context: Context): Promise<NextResp
   if (!isVoiceServiceRequest(request)) return NextResponse.json(
     { data: null, error: { code: 'UNAUTHORIZED', message: 'Invalid service credentials' } }, { status: 401 }
   );
-  const parsed = z.string().uuid().safeParse((await context.params).id);
+  const parsed = z.guid().safeParse((await context.params).id);
   if (!parsed.success) return NextResponse.json(
     { data: null, error: { code: 'VALIDATION_ERROR', message: 'Invalid attempt ID' } }, { status: 400 }
   );

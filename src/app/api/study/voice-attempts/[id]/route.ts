@@ -11,7 +11,7 @@ export async function GET(_request: Request, context: Context): Promise<NextResp
   if (!session?.user?.id) return NextResponse.json(
     { data: null, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, { status: 401 }
   );
-  const parsed = z.string().uuid().safeParse((await context.params).id);
+  const parsed = z.guid().safeParse((await context.params).id);
   if (!parsed.success) return NextResponse.json(
     { data: null, error: { code: 'VALIDATION_ERROR', message: 'Invalid attempt ID' } }, { status: 400 }
   );
@@ -34,7 +34,7 @@ export async function DELETE(_request: Request, context: Context): Promise<NextR
   if (!session?.user?.id) return NextResponse.json(
     { data: null, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, { status: 401 }
   );
-  const parsed = z.string().uuid().safeParse((await context.params).id);
+  const parsed = z.guid().safeParse((await context.params).id);
   if (!parsed.success) return NextResponse.json(
     { data: null, error: { code: 'VALIDATION_ERROR', message: 'Invalid attempt ID' } }, { status: 400 }
   );

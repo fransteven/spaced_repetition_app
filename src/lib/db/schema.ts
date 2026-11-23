@@ -81,6 +81,8 @@ export const reviewLogs = pgTable('review_logs', {
   scheduled_days: integer('scheduled_days').notNull(),
   elapsed_days:   integer('elapsed_days').notNull(),
   reviewed_at:    timestamp('reviewed_at').defaultNow().notNull(),
+  // Client-generated id of an offline review (dedupes retried syncs); null for online reviews.
+  client_review_id: uuid('client_review_id').unique(),
 });
 
 // A voice attempt is the idempotency boundary for an automatic review.

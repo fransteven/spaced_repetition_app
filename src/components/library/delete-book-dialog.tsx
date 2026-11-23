@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { unwrapError } from '@/lib/api-envelope';
 import type { LibraryBook } from '@/lib/services/book-service';
+import { removeDownload } from '@/components/offline/download-store';
 
 interface DeleteBookDialogProps {
   open: boolean;
@@ -37,6 +38,8 @@ export function DeleteBookDialog({ open, onOpenChange, book }: DeleteBookDialogP
       return;
     }
 
+    // The book is gone from the server: drop the copy on this device too.
+    await removeDownload('book', book.id, { silent: true });
     onOpenChange(false);
     router.refresh();
   };

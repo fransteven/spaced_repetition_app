@@ -21,6 +21,14 @@ describe('serialized preference saving', () => {
     expect(status).toHaveBeenLastCalledWith('saved');
   });
 
+  it('reports a change kept on the device (offline outbox) as queued, not as an error', async () => {
+    const status = vi.fn();
+    const saver = createPreferenceSaver(async (): Promise<'queued'> => 'queued', status, 500);
+    saver.schedule(DEFAULT_READER_PREFERENCES);
+    await saver.flush();
+    expect(status).toHaveBeenLastCalledWith('queued');
+  });
+
   it('never overlaps writes and saves the latest change after an in-flight request', async () => {
     let release: ((saved: boolean) => void) | undefined;
     const save = vi.fn<(preferences: ReaderPreferences) => Promise<boolean>>(() => new Promise((resolve) => { release = resolve; }));

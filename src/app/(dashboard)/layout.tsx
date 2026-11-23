@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { listDecksForUserPage } from '@/lib/services/deck-service';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import type { PaletteDeck } from '@/components/search/command-palette';
+import { OfflineBanner } from '@/components/offline/offline-banner';
 
 export const metadata: Metadata = {
   title: 'Dashboard — NeuroCards',
@@ -33,6 +34,7 @@ export default async function DashboardLayout({
 
   return (
     <DashboardShell decks={decks} hasDueCards={hasDueCards}>
+      <OfflineBanner />
       {children}
     </DashboardShell>
   );

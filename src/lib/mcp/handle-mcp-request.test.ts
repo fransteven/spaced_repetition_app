@@ -4,8 +4,14 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const MAP_ID = '22222222-2222-4222-8222-222222222222';
 const VALID_TOKEN = `nck_${'a'.repeat(43)}`;
 
+const DECK_ID = '33333333-3333-4333-8333-333333333333';
+// Written by hand-made SQL: valid Postgres uuid, not RFC 9562 (version digit "e").
+const LEGACY_CARD_ID = '4a587baa-bd0f-e5ba-ae53-425ce692bad6';
+
 const createMindMap = vi.fn();
 const getMindMapForUser = vi.fn();
+const createCardsForUser = vi.fn();
+const updateCardForUser = vi.fn();
 
 vi.mock('@/lib/services/api-token-service', () => ({
   resolveApiToken: async (token: string) => (token === VALID_TOKEN ? USER_ID : null),
@@ -16,6 +22,17 @@ vi.mock('@/lib/services/mind-map-service', () => ({
   getMindMapForUser: (...args: unknown[]) => getMindMapForUser(...args),
   listMindMaps: async () => [],
   updateMindMap: vi.fn(),
+}));
+
+vi.mock('@/lib/services/deck-service', () => ({
+  listDecksForUser: async () => [],
+  createDeckForUser: vi.fn(),
+}));
+
+vi.mock('@/lib/services/card-service', () => ({
+  createCardsForUser: (...args: unknown[]) => createCardsForUser(...args),
+  updateCardForUser: (...args: unknown[]) => updateCardForUser(...args),
+  listCardsForDeck: async () => [],
 }));
 
 const { handleMcpRequest } = await import('./handle-mcp-request');
@@ -42,6 +59,8 @@ describe('MCP endpoint', () => {
   beforeEach(() => {
     createMindMap.mockReset();
     getMindMapForUser.mockReset();
+    createCardsForUser.mockReset();
+    updateCardForUser.mockReset();
     delete process.env.AUTH_URL;
     delete process.env.NEXTAUTH_URL;
   });
@@ -58,15 +77,19 @@ describe('MCP endpoint', () => {
       clientInfo: { name: 'test', version: '1' },
     });
     expect(status).toBe(200);
-    expect(body.result.serverInfo.name).toBe('neurocards-mind-maps');
+    expect(body.result.serverInfo.name).toBe('neurocards');
     expect(body.result.capabilities.tools).toBeDefined();
     expect(body.result.instructions).toContain('create_mind_map');
+    expect(body.result.instructions).toContain('create_cards');
   });
 
-  it('lists the four mind map tools with JSON schemas', async () => {
+  it('lists the mind map and flashcard tools with JSON schemas', async () => {
     const { body } = await call('tools/list');
     const names = body.result.tools.map((tool: { name: string }) => tool.name).sort();
-    expect(names).toEqual(['create_mind_map', 'get_mind_map', 'list_mind_maps', 'update_mind_map']);
+    expect(names).toEqual([
+      'create_cards', 'create_deck', 'create_mind_map', 'get_mind_map', 'list_cards',
+      'list_decks', 'list_mind_maps', 'update_card', 'update_mind_map',
+    ]);
     const create = body.result.tools.find((tool: { name: string }) => tool.name === 'create_mind_map');
     expect(create.inputSchema.required).toEqual(['markdown']);
   });
@@ -99,5 +122,39 @@ describe('MCP endpoint', () => {
     const { body } = await call('tools/call', { name: 'create_mind_map', arguments: { markdown: '' } });
     expect(body.result?.isError ?? Boolean(body.error)).toBe(true);
     expect(createMindMap).not.toHaveBeenCalled();
+  });
+
+  it('creates cards in the token owner\'s deck without taking ids from the client', async () => {
+    createCardsForUser.mockResolvedValue([{ id: '44444444-4444-4444-8444-444444444444', front: 'What is S?' }]);
+    const { body } = await call('tools/call', {
+      name: 'create_cards',
+      arguments: {
+        deck_id: DECK_ID,
+        cards: [{ id: 'made-up', user_id: 'someone-else', front: 'What is S?', back: 'Stability', tags: ['fsrs'] }],
+      },
+    });
+    expect(body.result.isError).toBeFalsy();
+    expect(createCardsForUser).toHaveBeenCalledWith(USER_ID, DECK_ID, [{ front: 'What is S?', back: 'Stability', tags: ['fsrs'] }]);
+    expect(body.result.structuredContent.study_url).toBe(`https://app.test/study/${DECK_ID}`);
+  });
+
+  it("hides another user's deck behind not found", async () => {
+    createCardsForUser.mockRejectedValue(new ServiceError('FORBIDDEN', 'Access denied'));
+    const { body } = await call('tools/call', {
+      name: 'create_cards',
+      arguments: { deck_id: DECK_ID, cards: [{ front: 'Q', back: 'A' }] },
+    });
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toBe('Deck not found');
+  });
+
+  it('updates a card whose id is not RFC 9562', async () => {
+    updateCardForUser.mockResolvedValue({ id: LEGACY_CARD_ID, front: 'New front', tags: [] });
+    const { body } = await call('tools/call', {
+      name: 'update_card',
+      arguments: { id: LEGACY_CARD_ID, front: 'New front' },
+    });
+    expect(body.result.isError).toBeFalsy();
+    expect(updateCardForUser).toHaveBeenCalledWith(USER_ID, LEGACY_CARD_ID, { front: 'New front', back: undefined, tags: undefined });
   });
 });

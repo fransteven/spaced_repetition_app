@@ -31,7 +31,7 @@ import { createBookmark, deleteBookmark, type BookBookmark } from '@/lib/service
 import { updateReaderPreferences } from '@/lib/services/reader-preferences-service';
 import { ServiceError } from '@/lib/services/service-error';
 
-const AnnotationIdSchema = z.object({ id: z.string().uuid() });
+const AnnotationIdSchema = z.object({ id: z.guid() });
 const AnnotationPatchSchema = AnnotationIdSchema.extend({ patch: UpdateAnnotationSchema });
 
 interface ActionError {

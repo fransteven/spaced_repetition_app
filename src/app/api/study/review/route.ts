@@ -18,15 +18,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   const parsed = SubmitReviewSchema.safeParse(body);
 
   if (!parsed.success) {
+    console.error('[POST /api/study/review] invalid body', parsed.error.issues);
     return NextResponse.json(
-      { data: null, error: { code: 'VALIDATION_ERROR', message: parsed.error.message } },
+      { data: null, error: { code: 'VALIDATION_ERROR', message: 'Invalid review request' } },
       { status: 400 },
     );
   }
 
   try {
     // userId always from session — never from body (AGENTS.md §10.8)
-    const result = await submitReview(session.user.id, parsed.data.card_id, parsed.data.rating);
+    const result = await submitReview(
+      session.user.id,
+      parsed.data.card_id,
+      parsed.data.rating,
+      parsed.data.client_review_id,
+    );
     return NextResponse.json({ data: result, error: null });
   } catch (error) {
     if (error instanceof ServiceError) {

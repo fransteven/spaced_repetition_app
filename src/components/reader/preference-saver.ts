@@ -1,6 +1,10 @@
 import type { ReaderPreferences } from '@/lib/services/reader-preferences-service';
 
-export type PreferenceSaveStatus = 'saved' | 'saving' | 'error';
+/** `queued`: saved on this device (offline outbox), synced later. */
+export type PreferenceSaveStatus = 'saved' | 'saving' | 'queued' | 'error';
+
+/** What one save attempt achieved: true = server saved it, 'queued' = kept on the device. */
+export type PreferenceSaveOutcome = boolean | 'queued';
 
 export interface PreferenceSaver {
   schedule: (preferences: ReaderPreferences) => void;
@@ -10,7 +14,7 @@ export interface PreferenceSaver {
 
 /** Coalesce changes before sending; never let an older write finish after a newer one. */
 export function createPreferenceSaver(
-  save: (preferences: ReaderPreferences) => Promise<boolean>,
+  save: (preferences: ReaderPreferences) => Promise<PreferenceSaveOutcome>,
   onStatus: (status: PreferenceSaveStatus) => void,
   debounceMs: number
 ): PreferenceSaver {
@@ -23,9 +27,9 @@ export function createPreferenceSaver(
     while (pending) {
       const current = pending;
       pending = null;
-      let saved = false;
-      try { saved = await save(current); } catch { /* Network failures remain retryable. */ }
-      if (!pending) onStatus(saved ? 'saved' : 'error');
+      let outcome: PreferenceSaveOutcome = false;
+      try { outcome = await save(current); } catch { /* Network failures remain retryable. */ }
+      if (!pending) onStatus(outcome === 'queued' ? 'queued' : outcome ? 'saved' : 'error');
     }
   };
 

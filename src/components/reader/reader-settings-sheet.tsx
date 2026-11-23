@@ -241,6 +241,7 @@ html{padding:0!important}body{margin:0;min-height:100vh;display:grid;align-conte
             <p role="status" className="text-body-sm text-on-surface-variant">
               {saveStatus === 'saving' ? 'Saving your preferences…'
                 : saveStatus === 'error' ? 'Could not save preferences.'
+                  : saveStatus === 'queued' ? 'Saved on this device. They sync when you are back online.'
                   : 'Preferences synced across devices'}
             </p>
             {saveStatus === 'error' && <Button variant="ghost" className="min-h-11" onClick={onRetry}>Retry</Button>}

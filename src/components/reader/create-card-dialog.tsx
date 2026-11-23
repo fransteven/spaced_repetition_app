@@ -43,6 +43,8 @@ interface CreateCardDialogProps {
   deckOptions: BookDeckOptions;
   onCreated: (created: CreatedBookCard) => void;
   onClose: () => void;
+  /** Suggesting and saving need the server: both are disabled while offline (the draft is kept). */
+  offline?: boolean;
 }
 
 export function CreateCardDialog({
@@ -52,6 +54,7 @@ export function CreateCardDialog({
   deckOptions,
   onCreated,
   onClose,
+  offline = false,
 }: CreateCardDialogProps): React.JSX.Element {
   const {
     control,
@@ -96,14 +99,14 @@ export function CreateCardDialog({
   // A plain selection starts with an AI draft; a translation is already one.
   const autoSuggested = useRef(false);
   useEffect(() => {
-    if (autoSuggested.current || source.translation) return;
+    if (autoSuggested.current || source.translation || offline) return;
     // Flag inside the timer: StrictMode's mount/cleanup/mount must not skip it.
     const timer = window.setTimeout(() => {
       autoSuggested.current = true;
       void suggest();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [source.translation, suggest]);
+  }, [source.translation, offline, suggest]);
 
   const deckLabel = (value: string | null): string => {
     if (value === NEW_DECK_VALUE) return 'New deck…';
@@ -186,7 +189,7 @@ export function CreateCardDialog({
                   variant="ghost"
                   size="sm"
                   className="text-primary"
-                  disabled={suggesting}
+                  disabled={suggesting || offline}
                   onClick={() => void suggest()}
                 >
                   <Sparkles className={suggesting ? 'animate-pulse' : undefined} />
@@ -218,12 +221,13 @@ export function CreateCardDialog({
             </div>
 
             {submitError && <p className="text-body-sm text-destructive">{submitError}</p>}
+            {offline && <p className="text-body-sm text-on-surface-variant">Requires a connection</p>}
 
             <div className="flex items-center justify-end gap-3">
               <DialogClose className="px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground">
                 Cancel
               </DialogClose>
-              <Button type="submit" disabled={isSubmitting || suggesting}>
+              <Button type="submit" disabled={isSubmitting || suggesting || offline}>
                 {isSubmitting ? 'Saving…' : 'Add card'}
               </Button>
             </div>

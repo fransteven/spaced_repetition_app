@@ -84,7 +84,7 @@ export function AiAssistantsManager({ initialTokens, mcpUrl }: AiAssistantsManag
     <section id="ai-assistants" className="scroll-mt-28">
       <SectionHeading
         title="AI assistants"
-        description="Let Claude or ChatGPT save mind maps straight into NeuroCards through MCP. Each connection gets its own token; revoke it at any time."
+        description="Let Claude or ChatGPT save flashcards and mind maps straight into NeuroCards through MCP. Each connection gets its own token; revoke it at any time."
       />
 
       <div className="space-y-4 sm:space-y-6">
@@ -105,7 +105,7 @@ export function AiAssistantsManager({ initialTokens, mcpUrl }: AiAssistantsManag
             <div className="mt-5 animate-pop-in space-y-3 rounded-xl bg-surface-container-low p-4 sm:p-5">
               <p className="flex items-start gap-2 text-body-sm font-semibold text-on-surface">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-tertiary" />
-                Copy it now: “{created.name}” will not be shown again. Anyone with this URL can edit your mind maps.
+                Copy it now: “{created.name}” will not be shown again. Anyone with this URL can add and edit your decks, cards and mind maps.
               </p>
               <CopyField label="Connector URL (Claude app, ChatGPT)" value={connectorUrl} />
               <CopyField label="Token only (Authorization: Bearer …)" value={created.token} />
@@ -128,7 +128,7 @@ export function AiAssistantsManager({ initialTokens, mcpUrl }: AiAssistantsManag
               items={[
                 'Open claude.ai (or Claude Desktop) → Settings → Connectors → Add custom connector.',
                 <>Name it “NeuroCards” and paste the connector URL. Leave the OAuth fields empty.</>,
-                'In a chat, enable NeuroCards in the tools menu and ask: “Make a mind map of … and save it to NeuroCards”.',
+                'In a chat, enable NeuroCards in the tools menu and ask: “Make flashcards about … in my NeuroCards deck” or “Make a mind map of … and save it to NeuroCards”.',
               ]}
             />
           )}
@@ -146,7 +146,7 @@ export function AiAssistantsManager({ initialTokens, mcpUrl }: AiAssistantsManag
               items={[
                 'In ChatGPT open Settings → Apps & Connectors → Advanced settings and turn on Developer mode.',
                 'Back in Apps & Connectors choose Create, name it “NeuroCards”, paste the connector URL and pick “No authentication”.',
-                'In a chat, add NeuroCards from the + menu (Developer mode) and ask for a mind map. Approve the save when asked.',
+                'In a chat, add NeuroCards from the + menu (Developer mode) and ask for flashcards or a mind map. Approve the save when asked.',
               ]}
             />
           )}
@@ -192,7 +192,7 @@ export function AiAssistantsManager({ initialTokens, mcpUrl }: AiAssistantsManag
           <DialogPopup>
             <DialogTitle>Revoke connection</DialogTitle>
             <DialogDescription>
-              <strong>{revoking?.name}</strong> will stop working immediately. Mind maps it created stay in your account.
+              <strong>{revoking?.name}</strong> will stop working immediately. Cards and mind maps it created stay in your account.
             </DialogDescription>
             <div className="flex items-center justify-end gap-3">
               <DialogClose className="px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground">

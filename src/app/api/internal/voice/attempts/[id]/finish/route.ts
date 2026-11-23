@@ -11,7 +11,7 @@ export async function POST(request: Request, context: Context): Promise<NextResp
   if (!isVoiceServiceRequest(request)) return NextResponse.json(
     { data: null, error: { code: 'UNAUTHORIZED', message: 'Invalid service credentials' } }, { status: 401 }
   );
-  const attemptId = z.string().uuid().safeParse((await context.params).id);
+  const attemptId = z.guid().safeParse((await context.params).id);
   const parsed = FinishVoiceAttemptSchema.safeParse(await request.json().catch(() => null));
   if (!attemptId.success || !parsed.success) return NextResponse.json(
     { data: null, error: { code: 'VALIDATION_ERROR', message: 'Invalid voice exam result' } }, { status: 400 }

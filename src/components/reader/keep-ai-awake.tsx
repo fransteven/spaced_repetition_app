@@ -28,6 +28,7 @@ export function KeepAiAwake(): null {
     let lastPing = Date.now(); // the page wakes the service while it loads
 
     const maybePing = (): void => {
+      if (!navigator.onLine) return; // nothing to wake offline; ping again once back online
       const now = Date.now();
       if (!keepAlivePingDue({ now, lastPing, mountedAt, visible: document.visibilityState === 'visible' })) return;
       lastPing = now;
@@ -36,9 +37,11 @@ export function KeepAiAwake(): null {
 
     const timer = window.setInterval(maybePing, 60_000);
     document.addEventListener('visibilitychange', maybePing);
+    window.addEventListener('online', maybePing);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', maybePing);
+      window.removeEventListener('online', maybePing);
     };
   }, []);
 

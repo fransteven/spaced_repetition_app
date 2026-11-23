@@ -34,9 +34,12 @@ interface Props {
   onToggleReveal: () => void
   onRate: (rating: FsrsRating) => void
   isRating: boolean
-  onEdit: () => void
-  onExam: () => void
-  onVoiceExam: () => void
+  /** Each action is hidden when its handler is omitted (offline: no editor, no AI exams). */
+  onEdit?: () => void
+  onExam?: () => void
+  onVoiceExam?: () => void
+  /** "Open in book" target; null hides it (offline and the book is not downloaded). */
+  sourceHref?: string | null
 }
 
 function stateTone(card: StudyCardItem): LearningStateBucket {
@@ -61,6 +64,7 @@ export function StudyCard({
   onEdit,
   onExam,
   onVoiceExam,
+  sourceHref,
 }: Props) {
   const { fontSize } = useDeckFontSize()
   const contentClass = cn(DECK_TYPOGRAPHY[fontSize].body, "leading-relaxed break-words [&_code]:text-[0.9em] [&_table]:text-[1em] [&_h1]:text-[1.4em] [&_h2]:text-[1.2em] [&_h3]:text-[1.1em]")
@@ -162,10 +166,12 @@ export function StudyCard({
 
           <div className="flex flex-wrap items-center justify-between gap-4 px-4">
           <div className="flex flex-wrap gap-1">
-            <Button variant="ghost" size="sm" onClick={onEdit} className="cursor-pointer">
-              <Pencil className="size-4" />
-              Edit card
-            </Button>
+            {onEdit && (
+              <Button variant="ghost" size="sm" onClick={onEdit} className="cursor-pointer">
+                <Pencil className="size-4" />
+                Edit card
+              </Button>
+            )}
             {revealed && (
               <Button variant="ghost" size="sm" onClick={onToggleReveal} className="cursor-pointer">
                 <ChevronUp className="size-4" />
@@ -175,27 +181,25 @@ export function StudyCard({
           </div>
 
           <div className="flex flex-wrap gap-1">
-            {card.source && (
+            {card.source && sourceHref && (
               <Button
                 variant="ghost"
                 size="sm"
                 nativeButton={false}
                 title={card.source.book_title}
-                render={
-                  <Link href={`/read/${card.source.book_id}?cfi=${encodeURIComponent(card.source.cfi_range)}`} />
-                }
+                render={<Link href={sourceHref} />}
               >
                 <BookOpen className="size-4" />
                 Open in book
               </Button>
             )}
-            {!revealed && (
+            {!revealed && onVoiceExam && (
               <Button variant="ghost" size="sm" className="text-primary cursor-pointer" onClick={onVoiceExam}>
                 <Mic className="size-4" />
                 Oral exam
               </Button>
             )}
-            {revealed && (
+            {revealed && onExam && (
               <Button variant="ghost" size="sm" className="text-primary cursor-pointer" onClick={onExam}>
                 <GraduationCap className="size-4" />
                 Quiz me with AI

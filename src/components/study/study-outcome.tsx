@@ -29,6 +29,18 @@ interface Props {
   deckId: string
   deckName?: string
   stats?: StudyOutcomeStats
+  /** Offline (downloaded deck): links lead to /offline and the streak is a local estimate. */
+  offline?: boolean
+}
+
+function OfflineActions(): React.JSX.Element {
+  return (
+    <div className="flex w-full flex-col items-center justify-center gap-3 pt-2 sm:flex-row">
+      <Link href="/offline" className={buttonVariants({ size: "lg", className: "w-full sm:w-auto" })}>
+        Back to downloads
+      </Link>
+    </div>
+  )
 }
 
 function formatElapsed(ms: number): string {
@@ -74,7 +86,7 @@ function AnimatedNumber({ value }: { value: number }): React.ReactElement {
   return <span className="tabular">{current}</span>
 }
 
-export function StudyOutcome({ variant, deckId, deckName, stats }: Props): React.JSX.Element {
+export function StudyOutcome({ variant, deckId, deckName, stats, offline = false }: Props): React.JSX.Element {
   if (variant === "caught-up") {
     return (
       <div className="flex min-h-[75vh] flex-col items-center justify-center px-4 py-8 text-center animate-rise-in">
@@ -93,6 +105,9 @@ export function StudyOutcome({ variant, deckId, deckName, stats }: Props): React
             </p>
           </div>
 
+          {offline ? (
+            <OfflineActions />
+          ) : (
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <Link
               href="/decks"
@@ -111,6 +126,7 @@ export function StudyOutcome({ variant, deckId, deckName, stats }: Props): React
               Return to dashboard
             </Link>
           </div>
+          )}
         </div>
       </div>
     )
@@ -123,10 +139,16 @@ export function StudyOutcome({ variant, deckId, deckName, stats }: Props): React
     <div className="flex min-h-[80vh] flex-col items-center justify-center px-4 py-10 animate-rise-in">
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center space-y-8 text-center">
         {/* Streak notification if present */}
-        {stats?.streak !== undefined && stats.streak > 0 && (
-          <div className="animate-pop-in">
-            <StreakBadge days={stats.streak} size="lg" />
-          </div>
+        {/* Offline there is no local streak source: show the hint instead of a wrong number. */}
+        {offline ? (
+          <p className="text-body-sm text-on-surface-variant">Your streak will update when you sync</p>
+        ) : (
+          stats?.streak !== undefined &&
+          stats.streak > 0 && (
+            <div className="flex flex-col items-center gap-2 animate-pop-in">
+              <StreakBadge days={stats.streak} size="lg" />
+            </div>
+          )
         )}
 
         {/* Celebrated Title */}
@@ -196,6 +218,10 @@ export function StudyOutcome({ variant, deckId, deckName, stats }: Props): React
         )}
 
         {/* Actions */}
+        {offline ? (
+          <OfflineActions />
+        ) : (
+        <>
         <div className="flex w-full flex-col items-center justify-center gap-3 pt-2 sm:flex-row">
           <Link
             href="/decks"
@@ -221,6 +247,8 @@ export function StudyOutcome({ variant, deckId, deckName, stats }: Props): React
         >
           Back to {deckName || "deck"}
         </Link>
+        </>
+        )}
       </div>
     </div>
   )

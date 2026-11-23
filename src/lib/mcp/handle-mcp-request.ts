@@ -1,7 +1,7 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 
 import { resolveApiToken } from '@/lib/services/api-token-service';
-import { buildMindMapMcpServer } from '@/lib/mcp/neurocards-mcp-server';
+import { buildNeuroCardsMcpServer } from '@/lib/mcp/neurocards-mcp-server';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -40,7 +40,7 @@ export async function handleMcpRequest(request: Request, token: string | null): 
   }
 
   const origin = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? new URL(request.url).origin;
-  const server = buildMindMapMcpServer(userId, origin.replace(/\/+$/, ''));
+  const server = buildNeuroCardsMcpServer(userId, origin.replace(/\/+$/, ''));
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

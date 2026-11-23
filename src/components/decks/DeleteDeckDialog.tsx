@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { unwrapError } from '@/lib/api-envelope';
 import type { DeckWithStats } from '@/components/decks/DeckCard';
+import { removeDownload } from '@/components/offline/download-store';
 
 interface DeleteDeckDialogProps {
   open: boolean;
@@ -43,6 +44,8 @@ export function DeleteDeckDialog({
       return;
     }
 
+    // The deck is gone from the server: drop the copy on this device too.
+    await removeDownload('deck', deck.id, { silent: true });
     onOpenChange(false);
     router.refresh();
   };

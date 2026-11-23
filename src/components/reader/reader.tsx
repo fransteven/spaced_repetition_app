@@ -1,6 +1,10 @@
 'use client';
 
-import { createPreferenceSaver, type PreferenceSaveStatus } from '@/components/reader/preference-saver';
+import {
+  createPreferenceSaver,
+  type PreferenceSaveOutcome,
+  type PreferenceSaveStatus,
+} from '@/components/reader/preference-saver';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -25,19 +29,23 @@ import type { BookAnnotation } from '@/lib/services/annotation-service';
 import type { BookBookmark } from '@/lib/services/bookmark-service';
 import type { ReaderPreferences } from '@/lib/services/reader-preferences-service';
 import {
-  createAnnotationAction,
-  createBookmarkAction,
-  deleteAnnotationAction,
-  deleteBookmarkAction,
-  saveBookLocationsAction,
-  saveReadingProgressAction,
-  updateAnnotationAction,
-  updateReaderPreferencesAction,
-} from '@/app/actions/reader-actions';
+  createAnnotationOrQueue,
+  createBookmarkOrQueue,
+  deleteAnnotationOrQueue,
+  deleteBookmarkOrQueue,
+  saveLocationsOrQueue,
+  savePreferencesOrQueue,
+  saveProgressOrQueue,
+  updateAnnotationOrQueue,
+} from '@/lib/offline/persistence';
+import { isBookDownloaded, readBook } from '@/lib/offline/book-files';
+import { subscribe as subscribeToSync, type SyncResult } from '@/lib/offline/sync';
+import { useOnlineStatus } from '@/lib/offline/use-online-status';
 import { Button } from '@/components/ui/button';
 import { MasteryThread } from '@/components/primitives/mastery-thread';
 import { buildReaderCss, readReaderTokens, type HighlightColor, type ReaderTokens } from '@/components/reader/reader-theme';
 import {
+  fetchBookFile,
   useEpubReader,
   type ReaderLocation,
   type TextSelection,
@@ -67,6 +75,8 @@ interface ReaderProps {
   initialPreferences: ReaderPreferences;
   initialDeckOptions: BookDeckOptions;
   startCfi: string | null;
+  /** Where the back button goes. Defaults to the library (or the downloads page while offline). */
+  backHref?: string;
 }
 
 type Panel = 'toc' | 'notes' | 'settings' | 'ask' | null;
@@ -113,6 +123,20 @@ function sourceFromSelection(selection: TextSelection, chapter: string | null): 
   };
 }
 
+function logOfflineError(context: string): (error: unknown) => void {
+  return (error) => console.warn(`[reader] ${context}`, error);
+}
+
+/** The downloaded copy when there is one (opens at once, also online), else the server. */
+async function loadBookBytes(bookId: string): Promise<ArrayBuffer> {
+  try {
+    if (await isBookDownloaded(bookId)) return await readBook(bookId);
+  } catch (error) {
+    console.warn('[reader] could not read the downloaded book, loading it from the server', error);
+  }
+  return fetchBookFile(bookId);
+}
+
 function sourceFromAnnotation(annotation: BookAnnotation): CardDraftSource {
   return {
     quote: annotation.quote,
@@ -131,13 +155,18 @@ export function Reader({
   initialPreferences,
   initialDeckOptions,
   startCfi,
+  backHref,
 }: ReaderProps): React.JSX.Element {
   const { resolvedTheme } = useTheme();
+  const online = useOnlineStatus();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [preferences, setPreferences] = useState(initialPreferences);
   const [preferenceSaveStatus, setPreferenceSaveStatus] = useState<PreferenceSaveStatus>('saved');
   const [preferenceSaver] = useState(() => createPreferenceSaver(
-    async (next): Promise<boolean> => !(await updateReaderPreferencesAction(next)).error,
+    async (next): Promise<PreferenceSaveOutcome> => {
+      const result = await savePreferencesOrQueue(next);
+      return result.ok ? !result.value.error : 'queued'; // queued: kept on the device, syncs later
+    },
     setPreferenceSaveStatus,
     PREFS_DEBOUNCE_MS
   ));
@@ -218,7 +247,9 @@ export function Reader({
       lastCfiRef.current = next.cfi;
       window.clearTimeout(progressTimer.current);
       progressTimer.current = window.setTimeout(() => {
-        void saveReadingProgressAction({ book_id: book.id, cfi: next.cfi, progress: next.progress });
+        saveProgressOrQueue({ book_id: book.id, cfi: next.cfi, progress: next.progress }).catch(
+          logOfflineError('could not save the reading position')
+        );
       }, PROGRESS_DEBOUNCE_MS);
     },
     [book.id]
@@ -248,7 +279,8 @@ export function Reader({
     setSelection(next);
     if (!next) return; // the card stays until it is closed, the page turns or another selection replaces it
     setActiveHighlight(null);
-    const word = lookupWord(next.text);
+    // Translation and the dictionary both need the server: offline a word gets the toolbar only.
+    const word = navigator.onLine ? lookupWord(next.text) : null;
     setLookup(
       word
         ? {
@@ -287,13 +319,18 @@ export function Reader({
 
   const handleLocationsGenerated = useCallback(
     (json: string) => {
-      void saveBookLocationsAction({ book_id: book.id, locations_json: json });
+      saveLocationsOrQueue({ book_id: book.id, locations_json: json }).catch(
+        logOfflineError('could not save the page locations')
+      );
     },
     [book.id]
   );
 
+  const loadBook = useCallback(() => loadBookBytes(book.id), [book.id]);
+
   const reader = useEpubReader({
     bookId: book.id,
+    loadBook,
     initialCfi: startCfi ?? book.last_cfi,
     locationsJson: book.locations_json,
     language: book.language,
@@ -318,56 +355,107 @@ export function Reader({
   }, [status, tokens, annotations, renderHighlights]);
 
   // ── Annotation actions ──────────────────────────────────────────────────
+  // Ids are generated here, so a highlight saved offline keeps the same id once it syncs.
   const createHighlight = async (color: HighlightColor): Promise<BookAnnotation | null> => {
     if (!selection) return null;
-    const result = await createAnnotationAction({
+    const input = {
+      id: crypto.randomUUID(),
       book_id: book.id,
       cfi_range: selection.cfiRange,
       quote: selection.text.slice(0, 5000),
       chapter_label: location?.chapter ?? null,
       color,
-    });
+    };
+    const result = await createAnnotationOrQueue(input);
     reader.clearSelection();
     setSelection(null);
-    if (!result.data) {
-      toast.error(result.error?.message ?? 'Could not save highlight');
-      return null;
+    let created: BookAnnotation;
+    if (result.ok) {
+      if (!result.value.data) {
+        toast.error(result.value.error?.message ?? 'Could not save highlight');
+        return null;
+      }
+      created = result.value.data;
+    } else {
+      const now = new Date();
+      created = { ...input, user_id: '', note: null, created_at: now, updated_at: now };
     }
-    const created = result.data;
-    setAnnotations((current) => [...current, created]);
+    setAnnotations((current) => [...current.filter((item) => item.id !== created.id), created]);
     return created;
   };
 
   const patchAnnotation = async (id: string, patch: { color?: HighlightColor; note?: string | null }): Promise<void> => {
-    const result = await updateAnnotationAction(id, patch);
-    if (!result.data) {
-      toast.error(result.error?.message ?? 'Could not update highlight');
+    const result = await updateAnnotationOrQueue({ id, book_id: book.id, patch });
+    if (result.ok && !result.value.data) {
+      toast.error(result.value.error?.message ?? 'Could not update highlight');
       return;
     }
-    const updated = result.data;
-    setAnnotations((current) => current.map((item) => (item.id === id ? updated : item)));
+    const updatedAt = new Date();
+    setAnnotations((current) =>
+      current.map((item) => {
+        if (item.id !== id) return item;
+        return result.ok && result.value.data ? result.value.data : { ...item, ...patch, updated_at: updatedAt };
+      })
+    );
   };
 
   const removeAnnotation = async (id: string): Promise<void> => {
     const previous = annotations;
     setAnnotations((current) => current.filter((item) => item.id !== id));
     setActiveHighlight(null);
-    const result = await deleteAnnotationAction(id);
-    if (result.error) {
+    const result = await deleteAnnotationOrQueue({ id, book_id: book.id });
+    if (result.ok && result.value.error) {
       setAnnotations(previous);
-      toast.error(result.error.message);
+      toast.error(result.value.error.message);
     }
   };
+
+  // Preferences kept on the device read as synced once a later sync has emptied the outbox.
+  const preferencesQueuedAt = useRef<string | null>(null);
+  useEffect(() => {
+    preferencesQueuedAt.current = preferenceSaveStatus === 'queued' ? new Date().toISOString() : null;
+  }, [preferenceSaveStatus]);
+  useEffect(
+    () =>
+      subscribeToSync((state) => {
+        const queuedAt = preferencesQueuedAt.current;
+        const finishedAt = state.lastResult?.finished_at;
+        if (queuedAt && finishedAt && finishedAt >= queuedAt && state.pending === 0 && !state.syncing) {
+          setPreferenceSaveStatus((current) => (current === 'queued' ? 'saved' : current));
+        }
+      }),
+    []
+  );
+
+  // Bookmarks saved offline get their server id when the outbox syncs: swap local_id → id.
+  useEffect(() => {
+    let seen: SyncResult | null = null;
+    return subscribeToSync((state) => {
+      const result = state.lastResult;
+      if (!result || result === seen) return;
+      seen = result;
+      const swaps = new Map(
+        result.bookmark_ids.filter((item) => item.book_id === book.id).map((item) => [item.local_id, item.id])
+      );
+      if (swaps.size === 0) return;
+      setBookmarks((current) =>
+        current.map((item) => {
+          const id = swaps.get(item.id);
+          return id ? { ...item, id } : item;
+        })
+      );
+    });
+  }, [book.id]);
 
   // ── Bookmarks: one per page; the button toggles the bookmark of the page on screen.
   const pageBookmark = location ? bookmarks.find((item) => reader.isOnPage(item.cfi, location)) ?? null : null;
 
   const removeBookmark = async (bookmark: BookBookmark): Promise<void> => {
     setBookmarks((current) => current.filter((item) => item.id !== bookmark.id));
-    const result = await deleteBookmarkAction(bookmark.id);
-    if (result.error) {
+    const result = await deleteBookmarkOrQueue({ id: bookmark.id, book_id: book.id });
+    if (result.ok && result.value.error) {
       setBookmarks((current) => [...current, bookmark]);
-      toast.error(result.error.message);
+      toast.error(result.value.error.message);
     }
   };
 
@@ -378,19 +466,27 @@ export function Reader({
       return;
     }
     setBookmarkPending(true);
-    const result = await createBookmarkAction({
+    // Bookmark ids come from the server: one saved offline uses local_id until it syncs (see below).
+    const input = {
+      local_id: crypto.randomUUID(),
       book_id: book.id,
       cfi: location.cfi,
       chapter_label: location.chapter,
       excerpt: reader.pageExcerpt(),
       progress: location.progress,
-    });
-    setBookmarkPending(false);
-    if (!result.data) {
-      toast.error(result.error?.message ?? 'Could not add bookmark');
-      return;
+    };
+    const result = await createBookmarkOrQueue(input).finally(() => setBookmarkPending(false));
+    let created: BookBookmark;
+    if (result.ok) {
+      if (!result.value.data) {
+        toast.error(result.value.error?.message ?? 'Could not add bookmark');
+        return;
+      }
+      created = result.value.data;
+    } else {
+      const { local_id: id, ...rest } = input;
+      created = { ...rest, id, user_id: '', created_at: new Date() };
     }
-    const created = result.data;
     setBookmarks((current) => [...current.filter((item) => item.id !== created.id), created]);
   };
 
@@ -481,7 +577,7 @@ export function Reader({
             className={pillButton}
             aria-label="Back to library"
             nativeButton={false}
-            render={<Link href="/library" />}
+            render={<Link href={backHref ?? (online ? '/library' : '/offline')} />}
           >
             <ArrowLeft />
           </Button>
@@ -620,6 +716,7 @@ export function Reader({
           positionHref={location?.href ?? null}
           onOpenSource={(source) => void reader.goToPassage(source.href, source.locator)}
           className="shrink-0 md:w-96 lg:w-md"
+          offline={!online}
         />
       </div>
 
@@ -634,6 +731,7 @@ export function Reader({
             if (created) setNoteTarget(created);
           }}
           onCopy={() => void copyText(selection.text)}
+          offline={!online}
         />
       )}
 
@@ -653,6 +751,7 @@ export function Reader({
           }}
           onCopy={() => void copyText(active.quote)}
           onDelete={() => void removeAnnotation(active.id)}
+          offline={!online}
         />
       )}
 
@@ -673,10 +772,12 @@ export function Reader({
           deckOptions={deckOptions}
           onCreated={handleCardCreated}
           onClose={() => setCardDraft(null)}
+          offline={!online}
         />
       )}
 
-      {lookup && (
+      {/* Translation and the dictionary need the server: the card closes while offline. */}
+      {lookup && online && (
         <LookupPanel
           bookId={book.id}
           bookLanguage={book.language}

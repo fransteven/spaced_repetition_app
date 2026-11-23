@@ -35,7 +35,7 @@ export const UpdateDeckSchema = z.object({
 });
 
 export const CreateCardSchema = z.object({
-  deck_id:     z.string().uuid(),
+  deck_id:     DbIdSchema,
   front:       z.string().min(1).max(2000),
   back:        z.string().min(1).max(2000),
   image_url_1: z.string().url().optional(),
@@ -61,12 +61,32 @@ export const CardEditorFormSchema = CreateCardSchema.pick({
 export type CardEditorFormValues = z.infer<typeof CardEditorFormSchema>;
 
 export const SubmitReviewSchema = z.object({
-  card_id: z.string().uuid(),
+  card_id: DbIdSchema,
   rating:  z.enum(['again', 'hard', 'good', 'easy']),
+  client_review_id: DbIdSchema.optional(), // retried request → idempotent (offline mode)
+});
+
+export const OFFLINE_REVIEW_MAX_FUTURE_MS = 5 * 60 * 1000;
+export const OFFLINE_REVIEW_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000;
+export const MAX_OFFLINE_REVIEWS_PER_SYNC = 500;
+
+export const OfflineReviewSchema = z.object({
+  client_review_id: DbIdSchema,
+  card_id:          DbIdSchema,
+  rating:           z.enum(['again', 'hard', 'good', 'easy']),
+  reviewed_at:      z.iso.datetime({ offset: true }).refine((value) => {
+    const at = new Date(value).getTime();
+    const now = Date.now();
+    return at <= now + OFFLINE_REVIEW_MAX_FUTURE_MS && at >= now - OFFLINE_REVIEW_MAX_AGE_MS;
+  }, 'reviewed_at must be within the last 60 days and not in the future'),
+});
+
+export const SyncOfflineReviewsSchema = z.object({
+  reviews: z.array(OfflineReviewSchema).min(1).max(MAX_OFFLINE_REVIEWS_PER_SYNC),
 });
 
 export const StartVoiceAttemptSchema = z.object({
-  card_id: z.string().uuid(),
+  card_id: DbIdSchema,
 });
 
 export const FinishVoiceAttemptSchema = z.object({
@@ -89,7 +109,7 @@ export const ExamMessageSchema = z.object({
 });
 
 export const SubmitExamTurnSchema = z.object({
-  card_id:  z.string().uuid(),
+  card_id:  DbIdSchema,
   messages: z.array(ExamMessageSchema).max(40),
   exam_token: z.string().max(1000).optional(),
 });
@@ -102,7 +122,7 @@ export const CreateSkillSchema = z.object({
 
 export const CreateReminderProgramSchema = z.object({
   name: z.string().min(1).max(100),
-  deck_id: z.string().uuid(),
+  deck_id: DbIdSchema,
   enable_email: z.boolean(),
 });
 
@@ -123,20 +143,22 @@ export const UpdateBookSchema = z.object({
 });
 
 export const ReadingProgressSchema = z.object({
-  book_id:  z.string().uuid(),
+  book_id:  DbIdSchema,
   cfi:      z.string().min(1).max(2000),
   progress: z.number().min(0).max(1),
+  client_updated_at: z.iso.datetime({ offset: true }).optional(), // offline flush: never overwrite newer progress
 });
 
 export const BookLocationsSchema = z.object({
-  book_id:        z.string().uuid(),
+  book_id:        DbIdSchema,
   locations_json: z.string().min(2).max(2_000_000),
 });
 
 export const HighlightColorSchema = z.enum(['yellow', 'green', 'blue', 'pink']);
 
 export const CreateAnnotationSchema = z.object({
-  book_id:       z.string().uuid(),
+  id:            DbIdSchema.optional(), // client-generated (offline mode): creating twice is a no-op
+  book_id:       DbIdSchema,
   cfi_range:     z.string().min(1).max(2000),
   quote:         z.string().min(1).max(5000),
   chapter_label: z.string().max(300).nullable().optional(),
@@ -145,7 +167,7 @@ export const CreateAnnotationSchema = z.object({
 });
 
 export const CreateBookmarkSchema = z.object({
-  book_id:       z.string().uuid(),
+  book_id:       DbIdSchema,
   cfi:           z.string().min(1).max(2000),
   chapter_label: z.string().max(300).nullable().optional(),
   excerpt:       z.string().max(300).nullable().optional(),
@@ -180,7 +202,7 @@ export const TranslationLanguageSchema = z.enum(LANGUAGE_CODES);
 export const SourceLanguageSchema = z.union([z.literal(AUTO_DETECT), TranslationLanguageSchema]);
 
 export const TranslateSelectionSchema = z.object({
-  book_id: z.string().uuid(),
+  book_id: DbIdSchema,
   text:    z.string().trim().min(1).max(5000),
   context: z.string().max(2000).nullable().optional(),
   from:    SourceLanguageSchema,
@@ -201,7 +223,7 @@ export const DictionaryLookupSchema = z.object({
 });
 
 export const SuggestBookCardSchema = z.object({
-  book_id:       z.string().uuid(),
+  book_id:       DbIdSchema,
   quote:         z.string().trim().min(1).max(5000),
   context:       z.string().max(2000).nullable().optional(),
   chapter_label: z.string().max(300).nullable().optional(),
@@ -209,14 +231,14 @@ export const SuggestBookCardSchema = z.object({
 });
 
 export const CreateBookCardSchema = z.object({
-  book_id:       z.string().uuid(),
+  book_id:       DbIdSchema,
   deck:          z.union([
-    z.object({ id: z.string().uuid() }),
+    z.object({ id: DbIdSchema }),
     z.object({ new_name: z.string().trim().min(1).max(100) }),
   ]),
   front:         z.string().trim().min(1).max(2000),
   back:          z.string().trim().min(1).max(2000),
-  annotation_id: z.string().uuid().nullable().optional(),
+  annotation_id: DbIdSchema.nullable().optional(),
   selection:     CreateAnnotationSchema.pick({ cfi_range: true, quote: true, chapter_label: true })
     .extend({ color: HighlightColorSchema })
     .nullable()
@@ -244,8 +266,8 @@ export type BookCardFormValues = z.infer<typeof BookCardFormSchema>;
 const EmbeddingSchema = z.array(z.number()).length(EMBEDDING_DIMENSIONS);
 
 export const InternalSearchSchema = z.object({
-  user_id:     z.string().uuid(),
-  book_id:     z.string().uuid(),
+  user_id:     DbIdSchema,
+  book_id:     DbIdSchema,
   embedding:   EmbeddingSchema,
   spine_limit: z.number().int().min(0).nullable(),
   limit:       z.number().int().min(1).max(30),
@@ -255,24 +277,24 @@ export const InternalSearchSchema = z.object({
 
 /** Chunks next to the given ones in the same section ("small-to-big" expansion of retrieved passages). */
 export const InternalNeighborsSchema = z.object({
-  user_id:     z.string().uuid(),
-  book_id:     z.string().uuid(),
-  chunk_ids:   z.array(z.string().uuid()).min(1).max(30),
+  user_id:     DbIdSchema,
+  book_id:     DbIdSchema,
+  chunk_ids:   z.array(DbIdSchema).min(1).max(30),
   window:      z.number().int().min(1).max(3),
   spine_limit: z.number().int().min(0).nullable(),
 });
 
 /** Passages of a range of sections in reading order (chapter summary, key terms, "so far"). */
 export const InternalPassagesSchema = z.object({
-  user_id:     z.string().uuid(),
-  book_id:     z.string().uuid(),
+  user_id:     DbIdSchema,
+  book_id:     DbIdSchema,
   spine_from:  z.number().int().min(0),
   spine_to:    z.number().int().min(0).nullable(),
   spine_limit: z.number().int().min(0).nullable(),
   max_chunks:  z.number().int().min(1).max(60),
 });
 
-export const BookIdSchema = z.string().uuid();
+export const BookIdSchema = DbIdSchema;
 
 export const InternalSectionsQuerySchema = z.object({
   after: z.coerce.number().int().min(-1).default(-1),     // spine_index cursor; -1 = from the start
@@ -280,7 +302,7 @@ export const InternalSectionsQuerySchema = z.object({
 });
 
 export const InternalChunkSchema = z.object({
-  section_id:  z.string().uuid(),
+  section_id:  DbIdSchema,
   spine_index: z.number().int().min(0),
   chunk_index: z.number().int().min(0),
   text:        z.string().min(1).max(10_000),

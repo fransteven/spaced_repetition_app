@@ -11,11 +11,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Pill } from '@/components/primitives/pill';
 import { Surface } from '@/components/primitives/surface';
 import { MasteryThread } from '@/components/primitives/mastery-thread';
+import { DownloadMenuItems } from '@/components/offline/download-menu-items';
+import { DownloadStatusBadge } from '@/components/offline/download-status-badge';
+import { useDownload } from '@/components/offline/use-download';
 
 interface BookCardProps {
   book: LibraryBook;
@@ -26,6 +30,7 @@ interface BookCardProps {
 export function BookCard({ book, index, onDelete }: BookCardProps): React.JSX.Element {
   const percent = Math.round(book.progress * 100);
   const ready = book.status === 'ready';
+  const offline = useDownload('book', book.id, { label: book.title, hasCover: book.has_cover });
 
   const cover = (
     <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-surface-container-high">
@@ -77,7 +82,13 @@ export function BookCard({ book, index, onDelete }: BookCardProps): React.JSX.El
           >
             <MoreHorizontal />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuContent align="end" className="w-56">
+            {ready && (
+              <>
+                <DownloadMenuItems download={offline} downloadLabel="Download for offline" />
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem variant="destructive" onClick={onDelete}>
               <Trash2 />
               Delete
@@ -96,9 +107,12 @@ export function BookCard({ book, index, onDelete }: BookCardProps): React.JSX.El
       {ready && (
         <div className="mt-auto space-y-1.5">
           <MasteryThread value={percent} tone="primary" animate={false} />
-          <p className="text-label-sm tabular text-on-surface-variant">
-            {percent === 0 ? 'Not started' : `${percent}% read`}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <p className="text-label-sm tabular text-on-surface-variant">
+              {percent === 0 ? 'Not started' : `${percent}% read`}
+            </p>
+            <DownloadStatusBadge status={offline.status} progress={offline.progress} />
+          </div>
         </div>
       )}
     </Surface>

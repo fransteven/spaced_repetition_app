@@ -10,13 +10,13 @@ import { unwrapError } from "@/lib/api-envelope"
 import { useSlowStart, VOICE_STARTING_HINT } from "@/hooks/use-slow-start"
 
 const StartSchema = z.object({
-  attempt_id: z.string().uuid(),
+  attempt_id: z.guid(),
   ticket: z.string(),
   ws_url: z.string(),
 })
 
 const ResultSchema = z.object({
-  attempt_id: z.string().uuid(),
+  attempt_id: z.guid(),
   status: z.string(),
   transcript: z.string().nullable(),
   rating: z.enum(["again", "hard", "good", "easy"]).nullable(),

@@ -11,9 +11,10 @@ import {
   updateMindMap,
   type MindMap,
 } from '@/lib/services/mind-map-service';
+import { CARD_FORMAT_GUIDE, registerFlashcardTools } from '@/lib/mcp/flashcard-tools';
 
 /**
- * MCP server for one authenticated user. Works with any MCP client that speaks
+ * NeuroCards MCP server (mind maps + flashcards) for one authenticated user. Works with any MCP client that speaks
  * Streamable HTTP: Claude (claude.ai connectors, Desktop, Code) and ChatGPT
  * (developer-mode connectors). A fresh instance is built per request (stateless).
  */
@@ -25,12 +26,16 @@ const FORMAT_GUIDE = `Write the map as a Markdown outline:
 Keep every node short (a keyword or a phrase of at most ~12 words); put one idea per node.
 Aim for 3–7 main branches and 2–6 children per node. Inline formatting is stripped. Max 1000 nodes.`;
 
-const INSTRUCTIONS = `NeuroCards stores the user's mind maps (mental models of a topic) and renders them as interactive diagrams.
-When the user asks for a mind map, concept map or mental model, call create_mind_map with a Markdown outline and share the returned link.
+const INSTRUCTIONS = `NeuroCards is the user's spaced-repetition study app. Through these tools you can save flashcards and mind maps to their account.
+
+Flashcards: find the deck with list_decks (or create one with create_deck), check existing cards with list_cards, then add cards with create_cards and share the study link. Fix a card with update_card. Never invent ids: use the ids these tools return.
+${CARD_FORMAT_GUIDE}
+
+Mind maps: when the user asks for a mind map, concept map or mental model, call create_mind_map with a Markdown outline and share the returned link.
 To change an existing map, find it with list_mind_maps, read it with get_mind_map and save the full new outline with update_mind_map.
 ${FORMAT_GUIDE}`;
 
-const IdSchema = z.uuid().describe('Mind map id (from list_mind_maps or create_mind_map)');
+const IdSchema = z.guid().describe('Mind map id (from list_mind_maps or create_mind_map)');
 
 function text(value: string): CallToolResult['content'][number] {
   return { type: 'text', text: value };
@@ -46,9 +51,9 @@ function failure(error: unknown, context: string): CallToolResult {
   return { isError: true, content: [text('Something went wrong on NeuroCards. Try again.')] };
 }
 
-export function buildMindMapMcpServer(userId: string, origin: string): McpServer {
+export function buildNeuroCardsMcpServer(userId: string, origin: string): McpServer {
   const server = new McpServer(
-    { name: 'neurocards-mind-maps', title: 'NeuroCards mind maps', version: '1.0.0' },
+    { name: 'neurocards', title: 'NeuroCards', version: '1.1.0' },
     { instructions: INSTRUCTIONS },
   );
   const urlFor = (id: string): string => `${origin}/mind-maps/${id}`;
@@ -164,6 +169,8 @@ export function buildMindMapMcpServer(userId: string, origin: string): McpServer
       }
     },
   );
+
+  registerFlashcardTools(server, userId, origin);
 
   return server;
 }

@@ -31,7 +31,7 @@ async function run<T>(context: string, fallback: string, work: (userId: string) 
   }
 }
 
-const IdSchema = z.uuid();
+const IdSchema = z.guid();
 
 function invalid(message: string): ActionResult<never> {
   return { data: null, error: { code: 'VALIDATION_ERROR', message } };

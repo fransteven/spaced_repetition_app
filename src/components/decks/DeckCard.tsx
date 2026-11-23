@@ -26,6 +26,9 @@ import {
 import { Pill } from '@/components/primitives/pill';
 import { Surface } from '@/components/primitives/surface';
 import { MasteryThread } from '@/components/primitives/mastery-thread';
+import { DownloadMenuItems } from '@/components/offline/download-menu-items';
+import { DownloadStatusBadge } from '@/components/offline/download-status-badge';
+import { useDownload } from '@/components/offline/use-download';
 
 export interface DeckWithStats {
   id: string;
@@ -65,6 +68,7 @@ export function DeckCard({
   const fullyMastered = mastery === 100 && total_cards > 0;
   const state = due_count > 0 ? 'study' : fullyMastered ? 'mastered' : 'review';
   const accent = subjectAccent(subject);
+  const offline = useDownload('deck', id, { label: name });
 
   const breakdown = [
     { label: 'Due', value: due_count, dot: 'bg-state-struggling' },
@@ -86,6 +90,7 @@ export function DeckCard({
         <div className="mb-4 flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <Pill className={accent.pill} size="sm">{formatSubject(subject)}</Pill>
+            <DownloadStatusBadge status={offline.status} progress={offline.progress} />
           </div>
 
           <DropdownMenu>
@@ -94,7 +99,7 @@ export function DeckCard({
             >
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onClick={onEdit}>
                 <Pencil className="h-4 w-4" />
                 Edit deck
@@ -103,6 +108,7 @@ export function DeckCard({
                 <PlusCircle className="h-4 w-4" />
                 Add cards
               </DropdownMenuItem>
+              <DownloadMenuItems download={offline} downloadLabel="Download deck" />
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={onDelete}

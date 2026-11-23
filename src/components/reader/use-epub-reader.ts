@@ -100,6 +100,15 @@ interface Options extends Callbacks {
   /** Two pages side by side on wide screens; otherwise one column fills the page (the default). */
   twoPages: boolean;
   container: HTMLElement | null;
+  /** Loads the EPUB bytes (e.g. from the downloaded copy). Defaults to GET /api/books/:id/file. */
+  loadBook?: () => Promise<ArrayBuffer>;
+}
+
+/** The EPUB bytes from the server (ownership checked there). */
+export async function fetchBookFile(bookId: string): Promise<ArrayBuffer> {
+  const response = await fetch(`/api/books/${bookId}/file`);
+  if (!response.ok) throw new Error(`Could not load book (HTTP ${response.status})`);
+  return response.arrayBuffer();
 }
 
 export interface EpubReader {
@@ -668,9 +677,8 @@ export function useEpubReader(options: Options): EpubReader {
     let remeasureTimer: number | undefined;
 
     const init = async (): Promise<void> => {
-      const response = await fetch(`/api/books/${bookId}/file`);
-      if (!response.ok) throw new Error(`Could not load book (HTTP ${response.status})`);
-      const buffer = await response.arrayBuffer();
+      const load = latest.current.loadBook ?? ((): Promise<ArrayBuffer> => fetchBookFile(bookId));
+      const buffer = await load();
       const { default: ePub, EpubCFI: Cfi } = await import('epubjs');
       if (cancelled) return;
       cfiTool.current = new Cfi();

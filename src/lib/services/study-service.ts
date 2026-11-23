@@ -1,9 +1,17 @@
-import { and, eq, lte, or } from 'drizzle-orm';
+import { and, eq, inArray, lte, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { books, cards, cardSchedules, cardSources, decks, reviewLogs } from '@/lib/db/schema';
 import { ServiceError } from '@/lib/services/service-error';
 import { review, previewIntervals } from '@/lib/fsrs/algorithm';
-import type { FsrsRating, ScheduleInput } from '@/lib/fsrs/types';
+import type { FsrsRating, ReviewResult, ScheduleInput } from '@/lib/fsrs/types';
+import { orderStudyCards } from '@/lib/study/order-cards';
+import { toScheduleWire, type ScheduleWire } from '@/lib/study/schedule-wire';
+import {
+  decideOfflineReview,
+  isUniqueViolation,
+  sortByReviewedAt,
+  type OfflineReviewStatus,
+} from '@/lib/study/offline-review-decision';
 import { assertCardOwnership } from '@/lib/services/card-service';
 import { getStreakStatus } from '@/lib/services/dashboard-service';
 
@@ -71,31 +79,8 @@ export async function getStudySession(userId: string, deckId: string): Promise<S
       ),
     );
 
-  // Bucket and order per AGENTS.md §6.3
-  const b1: typeof rows = [];
-  const b2: typeof rows = [];
-  const b3: typeof rows = [];
-  const b4: typeof rows = [];
-  const b5: typeof rows = [];
-
-  for (const r of rows) {
-    const isDue = r.due_date.getTime() <= now.getTime();
-    if ((r.state === 'learning' || r.state === 'relearning') && isDue) {
-      b1.push(r);
-    } else if (r.state === 'review' && isDue && r.stability < 10) {
-      b2.push(r);
-    } else if (r.state === 'review' && isDue && r.stability >= 10 && r.stability < 50) {
-      b3.push(r);
-    } else if (r.state === 'review' && isDue && r.stability >= 50) {
-      b4.push(r);
-    } else if (r.state === 'new') {
-      b5.push(r);
-    }
-  }
-
-  // Shuffle new cards and cap at 20
-  b5.sort(() => Math.random() - 0.5);
-  const ordered = [...b1, ...b2, ...b3, ...b4, ...b5.slice(0, 20)];
+  // Bucket and order per AGENTS.md §6.3 (shared with the offline study shell)
+  const ordered = orderStudyCards(rows, now);
 
   const studyCards: StudyCardItem[] = ordered.map(r => {
     const scheduleInput: ScheduleInput = {
@@ -135,18 +120,84 @@ export async function getStudySession(userId: string, deckId: string): Promise<S
   };
 }
 
+const CLIENT_REVIEW_ID_CONSTRAINT = 'review_logs_client_review_id_unique';
+
+export interface SubmittedReview {
+  scheduled_days: number;
+  due_date:       Date;
+  schedule:       ScheduleWire;
+}
+
+async function getScheduleRow(userId: string, cardId: string): Promise<typeof cardSchedules.$inferSelect | undefined> {
+  const [schedule] = await db
+    .select()
+    .from(cardSchedules)
+    .where(and(eq(cardSchedules.card_id, cardId), eq(cardSchedules.user_id, userId)));
+  return schedule;
+}
+
+/** A retried review whose client_review_id is already logged: report the current schedule, apply nothing. */
+async function getAlreadySubmittedReview(
+  userId: string,
+  cardId: string,
+  clientReviewId: string,
+): Promise<SubmittedReview | null> {
+  const [log] = await db
+    .select({ user_id: reviewLogs.user_id })
+    .from(reviewLogs)
+    .where(eq(reviewLogs.client_review_id, clientReviewId));
+  if (!log) return null;
+  if (log.user_id !== userId) throw new ServiceError('FORBIDDEN', 'Access denied');
+
+  const schedule = await getScheduleRow(userId, cardId);
+  if (!schedule) throw new ServiceError('NOT_FOUND', 'Schedule not found');
+  return {
+    scheduled_days: schedule.scheduled_days,
+    due_date:       schedule.due_date,
+    schedule:       toScheduleWire(schedule),
+  };
+}
+
 export async function submitReview(
   userId: string,
   cardId: string,
   rating: FsrsRating,
-): Promise<{ scheduled_days: number; due_date: Date }> {
+  clientReviewId?: string,
+): Promise<SubmittedReview> {
   await assertCardOwnership(userId, cardId);
 
-  const result = await db.transaction((tx) => applyReview(tx, userId, cardId, rating));
-  return { scheduled_days: result.scheduled_days, due_date: result.due_date };
+  if (clientReviewId) {
+    const previous = await getAlreadySubmittedReview(userId, cardId, clientReviewId);
+    if (previous) return previous;
+  }
+
+  try {
+    const result = await db.transaction((tx) =>
+      applyReview(tx, userId, cardId, rating, undefined, { clientReviewId }),
+    );
+    return {
+      scheduled_days: result.scheduled_days,
+      due_date:       result.due_date,
+      schedule:       toScheduleWire(result.schedule),
+    };
+  } catch (error) {
+    // Two copies of the same retried request raced: the other one applied it.
+    if (clientReviewId && isUniqueViolation(error, CLIENT_REVIEW_ID_CONSTRAINT)) {
+      const previous = await getAlreadySubmittedReview(userId, cardId, clientReviewId);
+      if (previous) return previous;
+    }
+    throw error;
+  }
 }
 
 type ReviewTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export interface ApplyReviewOptions {
+  /** When the user actually answered (offline reviews sync later). Defaults to now. */
+  reviewedAt?:     Date;
+  /** Client id of an offline/retried review, stored for deduplication. */
+  clientReviewId?: string;
+}
 
 export async function applyReview(
   tx: ReviewTransaction,
@@ -154,7 +205,9 @@ export async function applyReview(
   cardId: string,
   rating: FsrsRating,
   expected?: { reps: number; lastReview: Date | null },
-): Promise<{ scheduled_days: number; due_date: Date; review_log_id: string }> {
+  options: ApplyReviewOptions = {},
+): Promise<{ scheduled_days: number; due_date: Date; review_log_id: string; schedule: ReviewResult }> {
+  const reviewedAt = options.reviewedAt ?? new Date();
   const [schedule] = await tx
     .select()
     .from(cardSchedules)
@@ -169,7 +222,10 @@ export async function applyReview(
     throw new ServiceError('FORBIDDEN', 'Card was reviewed while the exam was in progress');
   }
 
-  const result = review(schedule, rating, new Date());
+  // FSRS 4.5 (Ye et al., 2022): retrievability R = 0.9^(t/S) uses t = the time elapsed between
+  // the actual reviews, so a review made offline is scheduled from when it happened
+  // (reviewedAt), not from when it reached the server.
+  const result = review(schedule, rating, reviewedAt);
 
   await tx
     .update(cardSchedules)
@@ -192,11 +248,107 @@ export async function applyReview(
     rating,
     scheduled_days: result.scheduled_days,
     elapsed_days: result.elapsed_days,
+    reviewed_at: reviewedAt,
+    client_review_id: options.clientReviewId ?? null,
   }).returning({ id: reviewLogs.id });
 
   return {
     scheduled_days: result.scheduled_days,
     due_date: result.due_date,
     review_log_id: log.id,
+    schedule: result,
+  };
+}
+
+// ── Offline sync (POST /api/study/review/sync) ───────────────────────────────
+
+export interface OfflineReviewInput {
+  client_review_id: string;
+  card_id:          string;
+  rating:           FsrsRating;
+  reviewed_at:      string; // ISO, bounds checked by SyncOfflineReviewsSchema
+}
+
+export interface OfflineSyncResult {
+  results:   Array<{ client_review_id: string; status: OfflineReviewStatus }>;
+  schedules: Array<{ card_id: string } & ScheduleWire>;
+}
+
+async function syncOneOfflineReview(userId: string, item: OfflineReviewInput): Promise<OfflineReviewStatus> {
+  const reviewedAt = new Date(item.reviewed_at);
+  try {
+    return await db.transaction(async (tx) => {
+      const [logged] = await tx
+        .select({ id: reviewLogs.id })
+        .from(reviewLogs)
+        .where(eq(reviewLogs.client_review_id, item.client_review_id));
+
+      const [owner] = logged ? [] : await tx
+        .select({ user_id: decks.user_id })
+        .from(cards)
+        .innerJoin(decks, eq(decks.id, cards.deck_id))
+        .where(eq(cards.id, item.card_id));
+      const cardOwned = owner?.user_id === userId;
+
+      let [schedule] = logged || !cardOwned ? [] : await tx
+        .select({ id: cardSchedules.id, last_review: cardSchedules.last_review })
+        .from(cardSchedules)
+        .where(and(eq(cardSchedules.card_id, item.card_id), eq(cardSchedules.user_id, userId)))
+        .for('update');
+      if (!logged && cardOwned && !schedule) {
+        // Legacy card without a schedule row (the offline snapshot showed it as new): create it.
+        [schedule] = await tx
+          .insert(cardSchedules)
+          .values({ card_id: item.card_id, user_id: userId, state: 'new', due_date: reviewedAt })
+          .returning({ id: cardSchedules.id, last_review: cardSchedules.last_review });
+      }
+
+      const decision = decideOfflineReview({
+        alreadyLogged: Boolean(logged),
+        cardOwned,
+        lastReview:    schedule?.last_review ?? null,
+        reviewedAt,
+      });
+      if (decision !== 'apply') return decision;
+
+      await applyReview(tx, userId, item.card_id, item.rating, undefined, {
+        reviewedAt,
+        clientReviewId: item.client_review_id,
+      });
+      return 'applied';
+    });
+  } catch (error) {
+    // The same client_review_id was applied concurrently (two tabs/devices flushing at once).
+    if (isUniqueViolation(error, CLIENT_REVIEW_ID_CONSTRAINT)) return 'duplicate';
+    throw error;
+  }
+}
+
+/**
+ * Applies reviews made offline, oldest first, each in its own transaction (a failing item never
+ * rolls back the others). Returns one status per item and the current schedule of every card
+ * that still exists for the user, so the client can refresh its local snapshot.
+ */
+export async function syncOfflineReviews(
+  userId: string,
+  reviews: OfflineReviewInput[],
+): Promise<OfflineSyncResult> {
+  const results: OfflineSyncResult['results'] = [];
+  const touched = new Set<string>();
+
+  for (const item of sortByReviewedAt(reviews)) {
+    const status = await syncOneOfflineReview(userId, item);
+    results.push({ client_review_id: item.client_review_id, status });
+    if (status !== 'not_found') touched.add(item.card_id);
+  }
+
+  const schedules = touched.size === 0 ? [] : await db
+    .select()
+    .from(cardSchedules)
+    .where(and(eq(cardSchedules.user_id, userId), inArray(cardSchedules.card_id, [...touched])));
+
+  return {
+    results,
+    schedules: schedules.map((row) => ({ card_id: row.card_id, ...toScheduleWire(row) })),
   };
 }

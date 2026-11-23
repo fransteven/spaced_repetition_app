@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { signOut, useSession } from "next-auth/react"
-import { LogOut, Menu, Search, Settings } from "lucide-react"
+import { useSession } from "next-auth/react"
+import { Download, LogOut, Menu, Search, Settings } from "lucide-react"
 
 import { AppLogo } from "@/components/primitives/app-logo"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -19,6 +19,7 @@ import { MobileDrawer } from "@/components/layout/mobile-drawer"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { CommandPalette, type PaletteDeck } from "@/components/search/command-palette"
 import { useCommandPaletteHotkey } from "@/hooks/use-command-palette-hotkey"
+import { useLogout } from "@/components/offline/use-logout"
 
 function initialsOf(name: string | null | undefined): string {
   if (!name) return "?"
@@ -34,6 +35,7 @@ export function TopNav({ decks = [] }: TopNavProps): React.JSX.Element {
   const { data: session } = useSession()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const { requestLogout, busy: signingOut, dialog: logoutDialog } = useLogout()
 
   useCommandPaletteHotkey({ open: paletteOpen, onOpenChange: setPaletteOpen })
 
@@ -116,14 +118,19 @@ export function TopNav({ decks = [] }: TopNavProps): React.JSX.Element {
                 Settings
               </DropdownMenuItem>
 
+              <DropdownMenuItem render={<Link href="/offline" />}>
+                <Download className="h-4 w-4" />
+                Downloads
+              </DropdownMenuItem>
+
               <div className="flex items-center justify-between px-2 py-1.5 sm:hidden">
                 <span className="text-sm text-on-surface-variant">Theme</span>
                 <ThemeToggle />
               </div>
 
-              <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+              <DropdownMenuItem onClick={requestLogout} disabled={signingOut}>
                 <LogOut className="h-4 w-4" />
-                Sign out
+                {signingOut ? "Signing out…" : "Sign out"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -132,6 +139,7 @@ export function TopNav({ decks = [] }: TopNavProps): React.JSX.Element {
 
       <MobileDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
       <CommandPalette decks={decks} open={paletteOpen} onOpenChange={setPaletteOpen} />
+      {logoutDialog}
     </>
   )
 }
